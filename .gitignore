@@ -1,0 +1,32 @@
+# Executáveis
+*.exe
+*.out
+*.app
+
+# Arquivos de compilação
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+
+# Arquivos de debug
+*.pdb
+*.ilk
+
+# Arquivos do VS Code (opcionais - descomente se não quiser versionar)
+# .vscode/
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.log
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Dependências (descomente se não quiser versionar as bibliotecas)
+# dependencies/lib/*.dll
+# dependencies/lib/*.a
+# dependencies/lib/*.lib
