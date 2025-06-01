@@ -119,8 +119,8 @@ unsigned int shaderProgram;
 unsigned int VBO, VAO;
 
 // Constantes do jogo
-const int WINDOW_WIDTH = 800;
-const int WINDOW_HEIGHT = 600;
+const int WINDOW_WIDTH = 1000;
+const int WINDOW_HEIGHT = 720;
 const float TOWER_COST = 50.0f;
 const float TOWER_RANGE = 120.0f;
 const float TOWER_DAMAGE = 20.0f;
@@ -129,17 +129,6 @@ const float ENEMY_HEALTH_BASE = 60.0f;
 const float ENEMY_SPEED_BASE = 0.8f;
 const float ENEMY_REWARD_BASE = 10.0f;
 const int ENEMIES_PER_WAVE_BASE = 5;
-
-// Estruturas
-struct Point {
-    float x, y;
-    Point(float x = 0, float y = 0) : x(x), y(y) {}
-};
-
-struct Color {
-    float r, g, b, a;
-    Color(float r = 1, float g = 1, float b = 1, float a = 1) : r(r), g(g), b(b), a(a) {}
-};
 
 // Variáveis globais do jogo
 float money = 120.0f;

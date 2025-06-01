@@ -6,10 +6,11 @@ Um jogo Tower Defense desenvolvido em OpenGL que demonstra **modelagem geométri
 - [x] Modelagem geométrica de objetos 2D (círculos, retângulos, linhas)
 - [x] Implementação de transformações geométricas (translação, projeção ortográfica)
 - [x] Implementação de um sistema de autômatos finitos determinísticos (AFD) como mecânica de jogo
+- [x] Tamanho da janela 1920x720 pixels
 - [ ] Informações de Introdução e controle do jogo (vida, dinheiro, ondas, etc) na 
 interface
 - [ ] Escalabilidade da velocidade das ondas de inimigos ao longo do jogo
-- [ ] Tamanho da janela 1920x720 pixels
+
 
 ## 📋 Descrição do Projeto
 
