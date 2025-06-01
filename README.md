@@ -2,6 +2,15 @@
 
 Um jogo Tower Defense desenvolvido em OpenGL que demonstra **modelagem geométrica**, **transformações geométricas** e **teoria de autômatos finitos determinísticos** através de uma experiência interativa.
 
+# Tarefas do Projeto:
+- [x] Modelagem geométrica de objetos 2D (círculos, retângulos, linhas)
+- [x] Implementação de transformações geométricas (translação, projeção ortográfica)
+- [x] Implementação de um sistema de autômatos finitos determinísticos (AFD) como mecânica de jogo
+- [ ] Informações de Introdução e controle do jogo (vida, dinheiro, ondas, etc) na 
+interface
+- [ ] Escalabilidade da velocidade das ondas de inimigos ao longo do jogo
+- [ ] Tamanho da janela 1920x720 pixels
+
 ## 📋 Descrição do Projeto
 
 **Tower Defense AFD** é um projeto que implementa um jogo de defesa de torres em OpenGL, onde as torres funcionam como **Autômatos Finitos Determinísticos (AFD)** que processam palavras carregadas pelos inimigos. O objetivo principal é demonstrar a modelagem de objetos geométricos 2D, transformações geométricas e conceitos de teoria da computação.
