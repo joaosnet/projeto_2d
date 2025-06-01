@@ -1,142 +1,135 @@
-# 🚀 COSMIC DRIFT - Projeto OpenGL 2D
+# 🏰 TOWER DEFENSE AFD - Projeto OpenGL 2D
 
-Um ambiente 2D desenvolvido em OpenGL que demonstra **modelagem geométrica** e **transformações geométricas** através de uma experiência interativa.
+Um jogo Tower Defense desenvolvido em OpenGL que demonstra **modelagem geométrica**, **transformações geométricas** e **teoria de autômatos finitos determinísticos** através de uma experiência interativa.
 
 ## 📋 Descrição do Projeto
 
-**Cosmic Drift** é um projeto que implementa um ambiente espacial interativo em OpenGL. O objetivo principal é demonstrar a modelagem de objetos geométricos 2D e a aplicação de transformações geométricas (translação, rotação e escala) em um contexto prático e visual.
+**Tower Defense AFD** é um projeto que implementa um jogo de defesa de torres em OpenGL, onde as torres funcionam como **Autômatos Finitos Determinísticos (AFD)** que processam palavras carregadas pelos inimigos. O objetivo principal é demonstrar a modelagem de objetos geométricos 2D, transformações geométricas e conceitos de teoria da computação.
 
 ### 🔍 Principais Componentes:
-- **Modelagem Geométrica:** Implementação de diferentes primitivas 2D
-- **Transformações Geométricas:** Aplicação de translação, rotação e escala
-- **Sistema de Coordenadas:** Utilização de coordenadas homogêneas
-- **Pipeline OpenGL:** Uso de shaders personalizados
+- **Modelagem Geométrica:** Círculos (torres/inimigos/projéteis), retângulos (interface), linhas (caminho/trajetórias)
+- **Transformações Geométricas:** Translação para movimento, projeção ortográfica
+- **Sistema de Coordenadas:** Coordenadas cartesianas 2D com projeção ortográfica
+- **Pipeline OpenGL:** Shaders modernos (OpenGL 3.3 Core Profile)
+- **Teoria de Autômatos:** AFD implementado para mecânica de jogo
 
 ## 🔷 Modelagem Geométrica Implementada
 
-### 1. **Nave Espacial (Triângulo Estilizado)**
+### 1. **Torres AFD (Círculos)**
 ```cpp
-// Geometria: Triângulo estilizado representando uma nave
-GameObject createPlayerShip() {
-    ship.vertices = {
-         0.0f,  0.08f, 0.0f,  // ponta da nave
-        -0.05f, -0.05f, 0.0f,  // asa esquerda
-         0.05f, -0.05f, 0.0f,  // asa direita
-         0.0f, -0.02f, 0.0f   // motor central
-    };
-    ship.indices = {0, 1, 3, 0, 3, 2}; // 2 triângulos
-}
-```
-- **Geometria:** 4 vértices em coordenadas cartesianas normalizadas
-- **Topologia:** 2 triângulos conectados usando índices
-- **Representação:** Coordenadas (x, y, z) definindo pontos no espaço 2D
-
-### 2. **Asteroides (Hexágonos Irregulares)**
-```cpp
-// Geração procedural de asteroides irregulares
-GameObject createAsteroid() {
-    const float baseRadius = 0.08f + randomFloat(gen) * 0.05f;
-    const int sides = 6;
-    
-    // Centro do asteroide
-    asteroid.vertices.push_back(0.0f);
-    asteroid.vertices.push_back(0.0f);
-    asteroid.vertices.push_back(0.0f);
-    
-    // Vértices irregulares do asteroide
-    for(int i = 0; i < sides; i++) {
-        float angle = 2.0f * M_PI * i / sides;
-        float radiusVariation = baseRadius * (0.7f + randomFloat(gen) * 0.6f);
-        asteroid.vertices.push_back(radiusVariation * cos(angle));
-        asteroid.vertices.push_back(radiusVariation * sin(angle));
-        asteroid.vertices.push_back(0.0f);
+// Geometria: Círculo com centro e raio
+void drawCircle(float x, float y, float radius, Color color) {
+    const int segments = 32;
+    // Centro + pontos do círculo
+    vertices.push_back(x); vertices.push_back(y);
+    for (int i = 0; i <= segments; i++) {
+        float angle = 2.0f * M_PI * i / segments;
+        vertices.push_back(x + cos(angle) * radius);
+        vertices.push_back(y + sin(angle) * radius);
     }
 }
 ```
-- **Geometria:** 7 vértices (1 centro + 6 perímetro)
-- **Topologia:** 6 triângulos radiais formando uma figura única
-- **Variação:** Forma gerada proceduralmente com perturbação aleatória
-- **Transformações:** Rotação contínua, translação linear
-- **Variação:** Cada asteroide tem forma única gerada aleatoriamente
+- **Geometria:** 34 vértices (1 centro + 33 perímetro com fechamento)
+- **Topologia:** Triangle Fan (leque de triângulos)
+- **Estados AFD:** s0 (azul claro), s1 (laranja)
+- **Funcionalidade:** Processam símbolos 'a' e 'b' segundo transições AFD
 
-### 3. **Inimigos (Quadrados)**
+### 2. **Inimigos (Círculos Coloridos)**
 ```cpp
-// Quadrados representando naves inimigas
-GameObject createEnemy() {
-    enemy.vertices = {
-        -0.06f, -0.06f, 0.0f,  // inferior esquerdo
-         0.06f, -0.06f, 0.0f,  // inferior direito
-         0.06f,  0.06f, 0.0f,  // superior direito
-        -0.06f,  0.06f, 0.0f   // superior esquerdo
-    };
-    enemy.indices = {0, 1, 2, 0, 2, 3}; // 2 triângulos
+// Inimigos com cores HSL aleatórias
+Enemy(int wave) {
+    float hue = rng() % 360;
+    color = hslToRgb(hue, 0.6f, 0.55f);
+    // Cada inimigo carrega uma palavra do alfabeto {a,b}
+    afdWord = generateRandomAfdWord((rng() % 3) + 2);
 }
 ```
-- **Geometria:** 4 vértices formando um quadrado regular
-- **Topologia:** 2 triângulos usando strip de índices
-- **Cor:** Vermelho ameaçador
-- **Transformações:** IA com perseguição usando translação direcionada
-- **Comportamento:** Movimento adaptativo em direção ao jogador
+- **Geometria:** Círculos com raio 15px
+- **Cores:** Geração HSL aleatória para diversidade visual
+- **Dados:** Cada inimigo carrega uma palavra (2-4 símbolos)
+- **Movimento:** Translação ao longo do caminho predefinido
 
-### 4. **Power-ups (Losangos)**
+### 3. **Projéteis (Círculos Pequenos)**
 ```cpp
-// Losangos para itens especiais
-GameObject createPowerUp() {
-    powerup.vertices = {
-         0.0f,  0.05f, 0.0f,  // topo
-        -0.03f,  0.0f, 0.0f,  // esquerda
-         0.0f, -0.05f, 0.0f,  // baixo
-         0.03f,  0.0f, 0.0f   // direita
-    };
-    powerup.indices = {0, 1, 3, 1, 2, 3}; // 2 triângulos
+// Projéteis que carregam símbolos AFD
+Projectile(Point start, Enemy* target, float damage, 
+           const std::string& towerState, char symbol) {
+    radius = 5.0f;
+    color = afdStates[towerState].color; // Cor da torre origem
+    processedSymbol = symbol; // Símbolo a ser processado
 }
 ```
-- **Geometria:** 4 vértices em forma de diamante
-- **Topologia:** 2 triângulos conectados
-- **Cores:** Amarelo (Tiro Rápido) / Ciano (Escudo)
-- **Transformações:** Escala pulsante para destaque visual
-- **Efeitos:** Animação de pulsação contínua
+- **Geometria:** Círculos pequenos (raio 5px)
+- **Cor:** Herdam a cor da torre que os disparou
+- **Funcionalidade:** Transportam símbolos do AFD para processamento
 
-### 5. **Projéteis (Quadrados Pequenos)**
-- **Geometria:** Pequenos quadrados para precisão
-- **Cor:** Branco brilhante
-- **Transformações:** Translação de alta velocidade
-- **Física:** Herdam velocidade parcial da nave
+### 4. **Interface Gráfica (Retângulos)**
+```cpp
+// Elementos de UI e feedback visual
+void drawRectangle(float x, float y, float width, float height, Color color) {
+    float vertices[] = {x, y, x + width, y, x + width, y + height, x, y + height};
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+}
+```
+- **Barras de Vida:** Retângulos vermelhos/verdes proporcionais à saúde
+- **Interface Principal:** Barra inferior com informações do jogo
+- **Sistema de Texto:** Fonte bitmap 8x8 pixels renderizada como micro-retângulos
 
-### 6. **Partículas de Explosão**
-- **Geometria:** Micro-quadrados
-- **Cores:** Correspondem ao objeto destruído
-- **Transformações:** Dispersão radial com escala decrescente
-- **Efeitos:** Fade-out com transparência
+### 5. **Caminho dos Inimigos (Linhas)**
+```cpp
+// Caminho predefinido por pontos conectados
+std::vector<Point> path = {
+    {0, WINDOW_HEIGHT / 2.0f}, {150, WINDOW_HEIGHT / 2.0f},
+    {150, 100}, {400, 100}, {400, 400}, {650, 400},
+    {650, WINDOW_HEIGHT / 2.0f}, {WINDOW_WIDTH, WINDOW_HEIGHT / 2.0f}
+};
+```
+- **Geometria:** Sequência de linhas conectadas
+- **Renderização:** `GL_LINES` com espessura configurável
+- **Funcionalidade:** Define trajetória dos inimigos
 
-### 7. **Estrelas de Fundo**
-- **Geometria:** Pontos variados
-- **Cores:** Branco com intensidade variável
-- **Transformações:** Pulsação sutil para simular cintilação
-- **Ambiente:** 100 estrelas distribuídas aleatoriamente
+## 🤖 Sistema AFD Implementado
+
+### Estados do Autômato:
+```cpp
+std::map<std::string, AFDState> afdStates = {
+    {"s0", {"s0", false, true, Color(0.39f, 0.70f, 0.93f), TOWER_COST}}, // Estado inicial
+    {"s1", {"s1", true, false, Color(0.96f, 0.68f, 0.33f), TOWER_COST}}  // Estado final
+};
+```
+
+### Transições:
+```cpp
+std::vector<AFDTransition> afdTransitions = {
+    {"s0", 'a', "s0"}, // s0 --a--> s0
+    {"s0", 'b', "s1"}, // s0 --b--> s1
+    {"s1", 'a', "s0"}, // s1 --a--> s0
+    {"s1", 'b', "s1"}  // s1 --b--> s1
+};
+```
+
+### Mecânica do Jogo:
+- **Torres:** Representam estados do AFD (s0, s1)
+- **Inimigos:** Carregam palavras do alfabeto {a, b}
+- **Combate:** Torres só podem atacar inimigos cujo próximo símbolo é aceito pela transição
+- **Processamento:** Projéteis "consomem" símbolos das palavras dos inimigos
+- **Vitória:** Inimigo é destruído quando toda sua palavra é processada
 
 ## 🎮 Controles do Jogo
 
-### Comandos de Movimento:
-- **W / ↑:** Propulsão da nave (aplicação de força)
-- **A / ← e D / →:** Rotação da nave (esquerda/direita)
-- **SPACE:** Disparar projéteis
-
-### Comandos do Sistema:
-- **P:** Pausar/Despausar jogo
-- **R:** Reiniciar jogo (apenas quando Game Over)
-- **ESC:** Sair do programa
+### Comandos Principais:
+- **1:** Selecionar Torre S0 (estado inicial - azul)
+- **2:** Selecionar Torre S1 (estado final - laranja)
+- **ESPAÇO:** Iniciar próxima onda de inimigos
+- **ESC:** Cancelar seleção de torre
+- **R:** Reiniciar jogo (quando Game Over)
 
 ### Mecânicas de Jogo:
-- **Física Realista:** A nave possui inércia e momentum
-- **Sistema de Vidas:** 3 vidas iniciais
-- **Pontuação:** 10 pts (asteroides), 25 pts (inimigos), 50 pts (power-ups)
-- **Níveis:** Dificuldade aumenta automaticamente a cada 30 segundos
-- **Power-ups Temporários:** 5 segundos de duração cada
-
-### Power-ups Disponíveis:
-- **🟡 Amarelo:** Tiro Rápido - Reduz cooldown dos disparos
-- **🔵 Ciano:** Escudo - Proteção temporária contra colisões
+- **Economia:** Comece com $120, ganhe dinheiro eliminando inimigos
+- **Torres:** Custam $50 cada, têm alcance e taxa de tiro específicos
+- **Vida:** 10 vidas iniciais, perde 1 vida por inimigo que escape
+- **Ondas:** 10 ondas progressivamente mais difíceis
+- **Posicionamento:** Torres não podem ser muito próximas do caminho ou outras torres
 
 ## 🚀 Como Executar
 
@@ -149,583 +142,306 @@ GameObject createPowerUp() {
 ### Via Terminal (PowerShell):
 ```powershell
 # Compilar
-g++ main.cpp dependencies\lib\glad.c -o cosmic_drift.exe -Idependencies\include -Ldependencies\lib -lglfw3 -lopengl32 -lgdi32 -std=c++17
+g++ main.cpp dependencies\lib\glad.c -o tower_defense.exe -Idependencies\include -Ldependencies\lib -lglfw3 -lopengl32 -lgdi32 -std=c++17
 
 # Executar
-.\cosmic_drift.exe
+.\tower_defense.exe
 ```
 
 ## 🌟 Transformações Geométricas Demonstradas
 
 ### 1. **Translação (T)**
-- **Aplicação:** Movimento de todos os objetos
-- **Matriz:** T(tx, ty) para deslocamento no plano
-- **Exemplos:**
-  - Nave: Movimento baseado em força e inércia
-  - Asteroides: Movimento linear constante
-  - Projéteis: Trajetória balística
-  - Partículas: Dispersão radial de explosões
-
-### 2. **Rotação (R)**
-- **Aplicação:** Orientação e direcionamento
-- **Matriz:** R(θ) para rotação ao redor da origem
-- **Exemplos:**
-  - Nave: Rotação controlada pelo jogador
-  - Asteroides: Rotação contínua e aleatória
-  - Projéteis: Orientação baseada na trajetória
-
-### 3. **Escala (S)**
-- **Aplicação:** Animações e efeitos visuais
-- **Matriz:** S(sx, sy) para redimensionamento
-- **Exemplos:**
-  - Power-ups: Pulsação rítmica para destaque
-  - Partículas: Encolhimento durante fade-out
-  - Escudo: Expansão/contração para efeito visual
-
-### 4. **Composição de Transformações**
-- **Ordem:** T × R × S (Translação × Rotação × Escala)
-- **Coordenadas Homogêneas:** Sistema 4x4 para transformações 2D
-- **Pipeline:** Aplicação eficiente via shaders GPU
-
-## 🔧 Implementação das Transformações Geométricas
-
-### 1. **Sistema de Coordenadas Homogêneas**
 ```cpp
-// Matrizes 4x4 para transformações 2D
-float transform[16] = {0};
-float scaleMatrix[16] = {0};
-float rotMatrix[16] = {0};
-float transMatrix[16] = {0};
-```
-- Utilização de matrizes 4x4 para transformações 2D
-- Representação em coordenadas homogêneas (x, y, z, w)
-- Facilita composição sequencial de múltiplas transformações
-
-### 2. **Translação (T)**
-```cpp
-// Matriz de Translação T(tx, ty)
-transMatrix[0] = 1.0f; transMatrix[5] = 1.0f; 
-transMatrix[10] = 1.0f; transMatrix[15] = 1.0f;
-transMatrix[12] = obj.posX; transMatrix[13] = obj.posY;
-```
-- **Matriz T(tx, ty):**
-  ```
-  [1  0  0  tx]
-  [0  1  0  ty]
-  [0  0  1  0 ]
-  [0  0  0  1 ]
-  ```
-- **Aplicações Implementadas:**
-  - Movimento de objetos no plano 2D
-  - Posicionamento dinâmico baseado em velocidade
-  - Wraparound nas bordas da tela
-
-### 3. **Rotação (R)**
-```cpp
-// Matriz de Rotação R(θ)
-float cosR = cos(obj.rotation);
-float sinR = sin(obj.rotation);
-rotMatrix[0] = cosR; rotMatrix[1] = sinR;
-rotMatrix[4] = -sinR; rotMatrix[5] = cosR;
-rotMatrix[10] = 1.0f; rotMatrix[15] = 1.0f;
-```
-- **Matriz R(θ):**
-  ```
-  [cos(θ)  sin(θ)  0  0]
-  [-sin(θ) cos(θ)  0  0]
-  [0       0       1  0]
-  [0       0       0  1]
-  ```
-- **Aplicações Implementadas:**
-  - Rotação da nave controlada pelo usuário
-  - Rotação contínua de asteroides
-  - Orientação de objetos durante movimento
-
-### 4. **Escala (S)**
-```cpp
-// Matriz de Escala S(sx, sy)
-scaleMatrix[0] = obj.scaleX; scaleMatrix[5] = obj.scaleY; 
-scaleMatrix[10] = 1.0f; scaleMatrix[15] = 1.0f;
-
-// Animação de pulsação para power-ups
-obj.scaleX = 1.0f + 0.2f * sin(gameState.timeElapsed * obj.pulseSpeed);
-obj.scaleY = obj.scaleX;
-```
-- **Matriz S(sx, sy):**
-  ```
-  [sx  0   0  0]
-  [0   sy  0  0]
-  [0   0   1  0]
-  [0   0   0  1]
-  ```
-- **Aplicações Implementadas:**
-  - Efeitos de pulsação para power-ups
-  - Variação de tamanho de objetos
-  - Animação de partículas (expansão/contração)
-
-### 5. **Composição de Transformações**
-```cpp
-// Ordem: T × R × S (Translação × Rotação × Escala)
-// 1. R × S
-for(int row = 0; row < 4; row++) {
-    for(int col = 0; col < 4; col++) {
-        for(int k = 0; k < 4; k++) {
-            tempMatrix[row * 4 + col] += rotMatrix[row * 4 + k] * scaleMatrix[k * 4 + col];
-        }
-    }
-}
-
-// 2. T × (R × S)
-for(int row = 0; row < 4; row++) {
-    for(int col = 0; col < 4; col++) {
-        transform[row * 4 + col] = 0;
-        for(int k = 0; k < 4; k++) {
-            transform[row * 4 + col] += transMatrix[row * 4 + k] * tempMatrix[k * 4 + col];
-        }
+// Movimento dos inimigos ao longo do caminho
+void Enemy::update() {
+    Point target = path[pathIndex + 1];
+    float dx = target.x - position.x;
+    float dy = target.y - position.y;
+    float distance = sqrt(dx * dx + dy * dy);
+    
+    if (distance < speed) {
+        position = target; // Teleporte para próximo ponto
+        pathIndex++;
+    } else {
+        // Translação suave
+        position.x += (dx / distance) * speed;
+        position.y += (dy / distance) * speed;
     }
 }
 ```
-- Implementação manual da multiplicação de matrizes
-- Sequência de aplicação: primeiro escala, depois rotação, por fim translação
-- Armazenamento column-major para compatibilidade com OpenGL
+- **Aplicação:** Movimento suave de inimigos e projéteis
+- **Implementação:** Interpolação linear entre pontos do caminho
+- **Matemática:** Normalização de vetores direcionais
+
+### 2. **Projeção Ortográfica**
+```cpp
+// Matriz de projeção ortográfica para renderização 2D
+void setProjectionMatrix() {
+    float left = 0.0f, right = (float)WINDOW_WIDTH;
+    float bottom = 0.0f, top = (float)WINDOW_HEIGHT;
+    float near = -1.0f, far = 1.0f;
+    
+    float projection[16] = {
+        2.0f / (right - left), 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f / (top - bottom), 0.0f, 0.0f,
+        0.0f, 0.0f, -2.0f / (far - near), 0.0f,
+        -(right + left) / (right - left), -(top + bottom) / (top - bottom), 
+        -(far + near) / (far - near), 1.0f
+    };
+}
+```
+- **Funcionalidade:** Converte coordenadas do mundo para coordenadas da tela
+- **Implementação:** Matriz 4x4 aplicada via shaders
+- **Resultado:** Renderização 2D precisa em pixels
+
+### 3. **Transformação de Coordenadas**
+```cpp
+// Conversão mouse -> OpenGL (inversão Y)
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    double mouseX, mouseY;
+    glfwGetCursorPos(window, &mouseX, &mouseY);
+    mouseY = WINDOW_HEIGHT - mouseY; // Inverter eixo Y
+    placeTower(mouseX, mouseY);
+}
+```
+- **Necessidade:** GLFW usa origem superior-esquerda, OpenGL usa inferior-esquerda
+- **Solução:** Inversão matemática do eixo Y
+- **Aplicação:** Posicionamento preciso de torres via mouse
+
+## 🔧 Implementação Técnica OpenGL
+
+### Pipeline Moderno (OpenGL 3.3 Core):
+```cpp
+// Vertex Shader - Processamento de vértices
+const char* vertexShaderSource = R"(
+#version 330 core
+layout (location = 0) in vec2 aPos;
+uniform mat4 projection;
+void main() {
+    gl_Position = projection * vec4(aPos.x, aPos.y, 0.0, 1.0);
+}
+)";
+
+// Fragment Shader - Colorização
+const char* fragmentShaderSource = R"(
+#version 330 core
+out vec4 FragColor;
+uniform vec4 color;
+void main() {
+    FragColor = color;
+}
+)";
+```
+
+### Gestão de Buffers:
+```cpp
+// VAO + VBO para geometria dinâmica
+unsigned int VBO, VAO;
+glGenVertexArrays(1, &VAO);
+glGenBuffers(1, &VBO);
+
+// Upload dinâmico de geometria
+glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), 
+             vertices.data(), GL_DYNAMIC_DRAW);
+```
+
+### Características Técnicas:
+- **Shaders Programáveis:** Vertex e Fragment shaders customizados
+- **Buffers Dinâmicos:** Geometria gerada em tempo real
+- **Alpha Blending:** Transparência para efeitos visuais
+- **Viewport Transform:** Mapeamento para coordenadas de tela
 
 ## 🎯 Algoritmos e Sistemas Implementados
 
-### Sistema de Física:
-- **Integração Temporal:** Método de Euler para movimento
-- **Detecção de Colisão:** Círculos boundários otimizados
-- **Wrap-around:** Objetos atravessam bordas da tela
-- **Atrito Diferenciado:** Cada tipo de objeto possui fricção específica
+### Sistema de Detecção de Alcance:
+```cpp
+// Verificação se inimigo está no alcance da torre
+bool Tower::canAttack(Enemy* enemy) {
+    float dx = enemy->position.x - position.x;
+    float dy = enemy->position.y - position.y;
+    float distance = sqrt(dx * dx + dy * dy);
+    
+    if (distance < range && !enemy->wordProcessed) {
+        char currentSymbol = enemy->afdWord[enemy->currentSymbolIndex];
+        return getAfdTransition(afdStateName, currentSymbol) != nullptr;
+    }
+    return false;
+}
+```
 
-### Sistema de Spawning:
-- **Asteroides:** Geração procedural nas bordas da tela
-- **Inimigos:** Spawning adaptativo longe do jogador
-- **Power-ups:** Aparição aleatória em posições seguras
+### Sistema de Targeting:
+```cpp
+// Seleção do inimigo mais próximo atacável
+void Tower::findTarget(std::vector<Enemy>& enemies) {
+    target = nullptr;
+    float closestDistance = INFINITY;
+    
+    for (auto& enemy : enemies) {
+        float distance = sqrt(dx*dx + dy*dy);
+        if (distance < range && canAttack(&enemy) && distance < closestDistance) {
+            closestDistance = distance;
+            target = &enemy;
+        }
+    }
+}
+```
 
-### Inteligência Artificial:
-- **Inimigos:** Perseguição simples com vetor direcionado
-- **Variação:** Comportamento randomizado para imprevisibilidade
+### Geração Procedural:
+```cpp
+// Geração aleatória de palavras AFD
+std::string generateRandomAfdWord(int length = 3) {
+    std::string alphabet = "ab";
+    std::string word = "";
+    for (int i = 0; i < length; i++) {
+        word += alphabet[rng() % alphabet.length()];
+    }
+    return word;
+}
+```
 
-### Sistema de Partículas:
-- **Explosões:** 8-12 partículas por evento
-- **Dispersão:** Vetores radiais aleatórios
-- **Lifecycle:** Fade-out progressivo com transparência
+### Sistema de Cores HSL:
+```cpp
+// Conversão HSL para RGB para variedade visual
+Color hslToRgb(float h, float s, float l) {
+    // Implementação completa de conversão de espaço de cores
+    // Permite geração de cores vibrantes e harmônicas
+}
+```
 
-## 🔧 Características Técnicas
+## 🎨 Características Visuais
 
-### Renderização OpenGL:
-- **Vertex Shaders:** Aplicação de transformações matriciais
-- **Fragment Shaders:** Colorização e efeitos de transparência
-- **Blending:** Alpha blending para partículas e efeitos
-- **VAO/VBO/EBO:** Geometria otimizada em GPU
+### Sistema de Feedback Visual:
+- **Alcance de Torres:** Círculo semi-transparente durante posicionamento
+- **Barras de Vida:** Indicadores vermelhos/verdes proporcional à saúde
+- **Estado da Palavra:** Símbolo atual destacado entre colchetes `[a]`
+- **Targeting:** Linhas conectando torres aos seus alvos
+- **Preview de Torre:** Visualização antes do posicionamento
 
-### Performance:
-- **60 FPS Target:** Loop de jogo otimizado
-- **Delta Time:** Movimento independente de framerate
-- **Cleanup Automático:** Gerenciamento de memória eficiente
-- **Culling:** Objetos inativos são removidos automaticamente
+### Interface Rica:
+- **Fonte Bitmap:** Sistema de renderização de texto customizado 8x8 pixels
+- **Informações em Tempo Real:** Dinheiro, vidas, onda atual
+- **Feedback de Sistema:** Mensagens temporárias para ações do usuário
+- **Console Debug:** Informações detalhadas no terminal
 
-## 🎨 Inovações Visuais
-
-### Efeitos de Partículas Avançados:
-- **💫 Propulsão:** Trail de partículas azuis quando a nave acelera
-- **💥 Explosões:** Dispersão radial com cores correspondentes aos objetos
-- **🌀 Wraparound:** Efeitos visuais quando objetos atravessam bordas
-- **⚡ Impacto:** Feedback visual instantâneo em colisões
-
-### Sistema de Transparência:
-- **Alpha Blending:** Partículas com fade-out suave
-- **Escudo Pulsante:** Efeito visual ciano semi-transparente
-- **Estrelas Cintilantes:** Variação de brilho atmosférica
-
-### Interface Dinâmica:
-- **Console Atualizado:** Informações em tempo real
-- **Feedback Visual:** Cores indicam estados (power-ups, escudo)
-- **Animações Fluidas:** 60 FPS com interpolação suave
+### Esquema de Cores:
+- **Torres S0:** Azul claro (`Color(0.39f, 0.70f, 0.93f)`)
+- **Torres S1:** Laranja (`Color(0.96f, 0.68f, 0.33f)`)
+- **Inimigos:** Cores HSL aleatórias para distinção visual
+- **Interface:** Tons de cinza com contraste adequado
 
 ## 🏆 Requisitos Técnicos Atendidos
 
 ### ✅ Modelagem Geométrica:
-- **Geometria 2D:** 7 tipos diferentes de objetos implementados
-- **Topologia Variada:** Triângulos, quadrados, hexágonos irregulares
-- **Representação Eficiente:** VAO/VBO/EBO com índices otimizados
+- **Primitivas 2D:** Círculos (32 segmentos), retângulos, linhas
+- **Representação Eficiente:** Triangle Fan para círculos, Triangle Strip para retângulos
+- **Geometria Dinâmica:** Vértices calculados em tempo real
 
 ### ✅ Transformações Geométricas:
-- **Translação:** Movimento com física realista e inércia
-- **Rotação:** Controle direcional e rotação automática
-- **Escala:** Animações de pulsação e efeitos visuais
-- **Composição:** Matrizes 4x4 aplicadas via shaders
+- **Translação:** Movimento fluido via interpolação linear
+- **Projeção:** Matriz ortográfica 4x4 para mapeamento 2D
+- **Coordenadas:** Sistema cartesiano com origem configurável
 
-### ✅ Ambiente OpenGL:
-- **Pipeline Moderno:** OpenGL 3.3 Core Profile
-- **Shaders Personalizados:** Vertex e Fragment shaders
-- **Gestão de Recursos:** Buffers automáticos e cleanup
-- **Performance Otimizada:** Renderização eficiente em GPU
+### ✅ Pipeline OpenGL Moderno:
+- **OpenGL 3.3 Core:** Sem funcionalidades obsoletas
+- **Shaders Programáveis:** Vertex e Fragment customizados
+- **Buffers Eficientes:** VAO/VBO com upload dinâmico
+- **Alpha Blending:** Transparência e efeitos visuais
+
+### ✅ Teoria da Computação:
+- **AFD Funcional:** Estados e transições implementados
+- **Processamento de Palavras:** Símbolos consumidos sequencialmente
+- **Validação:** Torres só atacam se transição existe
 
 ## 🎮 Experiência de Jogo
 
-### Progressão e Desafio:
-- **Dificuldade Adaptativa:** Aumenta automaticamente
-- **Sistema de Pontuação:** Múltiplos objetivos de scoring
-- **Power-ups Estratégicos:** Timing e posicionamento críticos
-- **Física Realista:** Momentum e inércia para precisão
+### Progressão Equilibrada:
+- **10 Ondas:** Dificuldade crescente gradual
+- **Economia Estratégica:** Gerenciamento de recursos
+- **Posicionamento Tático:** Localização das torres é crítica
+- **Timing:** Coordenação entre ondas e construção
 
-### Jogabilidade Viciante:
-- **Controles Responsivos:** Input imediato e preciso
-- **Feedback Constante:** Visual e sonoro (partículas)
-- **Desafio Crescente:** Curva de aprendizado equilibrada
-- **Rejogabilidade:** Cada partida é única e dinâmica
+### Mecânicas Educativas:
+- **Visualização AFD:** Estados e transições claramente representados
+- **Processamento Visual:** Símbolos destacados durante consumo
+- **Feedback Imediato:** Torres só disparam se transição válida
+- **Experimentação:** Jogador descobre comportamentos AFD
 
 ## 📚 Aplicação Educacional
 
 Este projeto demonstra conceitos fundamentais de:
 
 ### Computação Gráfica:
-- **Pipeline de Renderização:** Vertex → Primitive Assembly → Fragment
-- **Transformações Afins:** Aplicação prática em tempo real
-- **Sistemas de Coordenadas:** Homogêneas e cartesianas
-- **Geometria Computacional:** Detecção de colisão e física
+- **Pipeline de Renderização:** Vertex Processing → Rasterization → Fragment Processing
+- **Transformações 2D:** Translação e projeção ortográfica
+- **Sistemas de Coordenadas:** Conversões entre diferentes espaços
+- **Geometria Computacional:** Círculos, distâncias, colisões
+
+### Teoria da Computação:
+- **Autômatos Finitos:** Estados, transições, alfabetos
+- **Processamento de Linguagens:** Reconhecimento de palavras
+- **Aplicação Prática:** AFD como mecânica de jogo
+- **Visualização:** Conceitos abstratos tornados tangíveis
 
 ### Programação de Jogos:
-- **Game Loop:** Estrutura clássica Input → Update → Render
-- **Estado de Jogo:** Gerenciamento centralizado
-- **Sistemas de Partículas:** Efeitos visuais procedurais
-- **IA Básica:** Comportamento de perseguição
+- **Game Loop:** Input → Update → Render
+- **Gerenciamento de Estado:** Múltiplas entidades independentes
+- **Sistemas de Targeting:** Algoritmos de seleção de alvos
+- **Interface de Usuário:** Feedback visual e interação
 
 ### Matemática Aplicada:
-- **Álgebra Linear:** Multiplicação de matrizes 4x4
-- **Trigonometria:** Movimento circular e direcionamento
-- **Física:** Integração numérica e cinemática
+- **Álgebra Linear:** Matrizes de transformação
+- **Geometria:** Distâncias euclidianas, normalização de vetores
+- **Trigonometria:** Geração de círculos via seno/cosseno
 - **Probabilidade:** Geração procedural e randomização
 
----
-
-## 🚀 Conclusão
-
-**Cosmic Drift** representa uma implementação completa e elegante dos conceitos de transformações geométricas em OpenGL, combinando:
-
-✨ **Técnica Sólida:** Demonstração rigorosa de conceitos fundamentais  
-🎮 **Experiência Envolvente:** Jogo viciante e divertido  
-🎨 **Qualidade Visual:** Efeitos modernos e interface polida  
-📖 **Valor Educacional:** Código bem documentado e estruturado  
-
-O projeto excede os requisitos básicos ao implementar um ambiente completo de jogo que serve tanto como demonstração técnica quanto como experiência interativa memorável.
-
-**Transforme geometria em diversão! 🌟**
-```powershell
-# Compilar
-g++ main.cpp dependencies\lib\glad.c -o app.exe -Idependencies\include -Ldependencies\lib -lglfw3 -lopengl32 -lgdi32 -std=c++17
-
-# Executar  
-.\app.exe
-```
-
 ## 📋 Estrutura do Projeto
 
 ```
-COSMIC_DRIFT/
+TOWER_DEFENSE_AFD/
 │
-├── main.cpp                 # Código fonte principal
-├── cosmic_drift.exe         # Executável compilado
+├── main.cpp                 # Código fonte principal (1057 linhas)
+├── tower_defense.exe        # Executável compilado
 ├── README.md                # Este documento
 │
 └── dependencies/            # Bibliotecas externas
-    ├── include/             # Arquivos de cabeçalho
-    │   ├── glad/           
-    │   ├── GLFW/           
-    │   └── KHR/            
-    │
-    └── lib/                 # Bibliotecas compiladas
+    ├── include/             # Headers OpenGL/GLFW
+    │   ├── glad/glad.h
+    │   ├── GLFW/glfw3.h
+    │   └── KHR/khrplatform.h
+    └── lib/                 # Bibliotecas linkadas
         ├── glad.c
         ├── glfw3.dll
-        ├── libglfw3.a
-        └── libglfw3dll.a
-```
-
-## 📚 Conceitos de Computação Gráfica Demonstrados
-
-### 1. **Sistemas de Coordenadas:**
-- Coordenadas cartesianas para representação de vértices
-- Coordenadas homogêneas para transformações
-- Normalização para manter consistência de tamanho
-
-### 2. **Representação Geométrica:**
-- Vértices e faces (índices) para definir objetos
-- Triangulação para renderização eficiente
-- Topologias variadas para diferentes formas
-
-### 3. **Transformações Afins:**
-- Implementação matemática das matrizes fundamentais
-- Aplicação prática em objetos em movimento
-- Composição de múltiplas transformações
-
-### 4. **Pipeline Gráfico:**
-- Vertex processing: transformação de coordenadas
-- Rasterização: conversão de primitivas em fragmentos
-- Fragment processing: colorização e efeitos visuais
-
-## 🏆 Conclusão
-
-O projeto **Cosmic Drift** implementa com sucesso os conceitos fundamentais de modelagem geométrica e transformações geométricas usando OpenGL. Através da criação de diferentes objetos 2D e da aplicação de translação, rotação e escala, o projeto demonstra de forma prática os fundamentos teóricos da computação gráfica.
-
-O sistema desenvolvido permite visualizar claramente como as transformações afetam os objetos em tempo real, proporcionando uma compreensão intuitiva dos conceitos matemáticos envolvidos. A implementação das matrizes de transformação e sua aplicação via shaders demonstra o fluxo completo do pipeline gráfico OpenGL.
-
-Este projeto serve como uma base sólida para explorar conceitos mais avançados de computação gráfica, como iluminação, texturização e técnicas de animação.
-
----
-
-## 📋 Estrutura do Projeto
-
-```
-COSMIC_DRIFT/
-│
-├── main.cpp                 # Código fonte principal
-├── cosmic_drift.exe         # Executável compilado
-├── README.md                # Este documento
-│
-└── dependencies/            # Bibliotecas externas
-    ├── include/             # Arquivos de cabeçalho
-    │   ├── glad/           
-    │   ├── GLFW/           
-    │   └── KHR/            
-    │
-    └── lib/                 # Bibliotecas compiladas
-        ├── glad.c
-        ├── glfw3.dll
-        ├── libglfw3.a
-        └── libglfw3dll.a
+        └── libglfw3.a
 ```
 
 ## 🔧 Conceitos Técnicos Implementados
 
 ### Modelagem Geométrica:
-- **Primitivas 2D:** Diferentes geometrias criadas programaticamente
-- **Representação:** Vértices em coordenadas cartesianas + índices
-- **Buffers OpenGL:** VAO, VBO e EBO para cada objeto
+- **Círculos:** 32 segmentos via Triangle Fan
+- **Retângulos:** 4 vértices via Triangle Fan
+- **Linhas:** Primitive GL_LINES com espessura configurável
+- **Texto:** Fonte bitmap 8x8 pixels como micro-retângulos
 
-### Transformações Afins:
-- **Translação:** Matriz T(tx, ty) para movimentação
-- **Rotação:** Matriz R(θ) para rotação ao redor da origem  
-- **Escala:** Matriz S(sx, sy) para redimensionamento
-- **Composição:** T × R × S aplicada via multiplicação de matrizes
+### Transformações Geométricas:
+- **Translação:** `T(dx, dy)` para movimento de entidades
+- **Projeção Ortográfica:** Matriz 4x4 para mapeamento 2D
+- **Conversão de Coordenadas:** GLFW ↔ OpenGL
 
-### Pipeline Gráfico:
-- **Vertex Shader:** Aplica transformações nos vértices
-- **Fragment Shader:** Define cores dos pixels
-- **Uniforms:** Comunicação CPU-GPU para matrizes e cores
-- **Coordenadas Homogêneas:** Sistema 4x4 para transformações 2D
+### Pipeline OpenGL:
+- **Vertex Shader:** Transformação de vértices via matriz de projeção
+- **Fragment Shader:** Colorização uniforme por primitiva
+- **Buffer Management:** VAO/VBO dinâmicos
+- **Uniform Variables:** Cor e matriz de projeção
 
-## 🛠️ Configuração do Ambiente
+## 🚀 Conclusão
 
-### Dependências Necessárias:
-- **GLFW 3.3+:** Gerenciamento de janelas e entrada
-- **GLAD:** Carregador de funções OpenGL 3.3 Core
-- **OpenGL 3.3+:** API gráfica (nativa do Windows)
+**Tower Defense AFD** representa uma implementação exemplar dos conceitos de transformações geométricas em OpenGL, combinando:
 
-### Configuração das Bibliotecas:
+✨ **Técnica Sólida:** Demonstração rigorosa de conceitos de computação gráfica  
+🤖 **Inovação Educativa:** AFD como mecânica de jogo única  
+🎮 **Experiência Envolvente:** Jogo estratégico e desafiador  
+📖 **Valor Didático:** Código bem estruturado e documentado  
 
-#### 1. GLFW Setup:
-- Baixe a versão MinGW-w64 do [site oficial](https://www.glfw.org/download.html)
-- Extraia os headers para `dependencies/include/GLFW/`
-- Copie as bibliotecas para `dependencies/lib/`
+O projeto excede os requisitos básicos ao implementar um sistema completo que integra teoria da computação com computação gráfica, criando uma experiência educativa única que torna conceitos abstratos em mecânicas de jogo tangíveis e divertidas.
 
-#### 2. GLAD Setup:
-- Acesse [GLAD Web Service](https://glad.dav1d.de/)
-- Configure: OpenGL 3.3+ Core Profile
-- Baixe e extraia `glad.h` para `dependencies/include/glad/`
-- Copie `glad.c` para `dependencies/lib/`
-
-### Verificação da Instalação:
-```powershell
-# Teste se MinGW está no PATH
-g++ --version
-
-# Teste a compilação
-g++ main.cpp dependencies\lib\glad.c -o test.exe -Idependencies\include -Ldependencies\lib -lglfw3 -lopengl32 -lgdi32 -std=c++17
-```
-
-## ⚡ Características do Programa
-
-### Visual Feedback:
-- **Objeto Ativo:** Exibido com brilho total (100% da cor)
-- **Objetos Inativos:** Escurecidos a 70% para indicação visual
-- **Instruções Dinâmicas:** Mostradas na tela (toggle com H)
-- **Janela:** 1000x800 pixels com título "Projeto 2D OpenGL - Transformações Geométricas"
-
-### Sistema de Transformações:
-- **Ordem de Aplicação:** Escala → Rotação → Translação (S × R × T)
-- **Coordenadas Homogêneas:** Matrizes 4x4 para transformações 2D
-- **Tempo Real:** Atualizações suaves a ~60 FPS
-- **Reset Individual:** Cada objeto pode ser resetado independentemente
-
-### Objetos Geométricos Detalhados:
-
-#### 🔺 Triângulo (Objeto 0)
-- **Cor:** Vermelho (1.0, 0.0, 0.0)
-- **Vértices:** 3 pontos formando triângulo equilátero
-- **Posição Inicial:** (-0.6, 0.3) - Superior esquerda
-
-#### 🟢 Quadrado (Objeto 1)  
-- **Cor:** Verde (0.0, 1.0, 0.0)
-- **Vértices:** 4 pontos com 2 triângulos (6 índices)
-- **Posição Inicial:** (0.6, 0.3) - Superior direita
-
-#### 🔵 Hexágono (Objeto 2)
-- **Cor:** Azul (0.0, 0.0, 1.0)
-- **Vértices:** 7 pontos (1 centro + 6 perímetro)
-- **Construção:** Trigonométrica com ângulos calculados
-- **Posição Inicial:** (-0.6, -0.3) - Inferior esquerda
-
-#### 🟡 Losango (Objeto 3)
-- **Cor:** Amarelo (1.0, 1.0, 0.0)
-- **Vértices:** 4 pontos em formato de diamante
-- **Proporção:** Mais alto que largo (0.7 altura, 0.4 largura)
-- **Posição Inicial:** (0.6, -0.3) - Inferior direita
-
-#### 🔷 Asteroide (Objeto 4)
-- **Cor:** Cinza (0.5, 0.5, 0.5)
-- **Variação:** Forma e tamanho irregulares
-- **Posição Inicial:** Posições aleatórias nas bordas da tela
-
-#### 🟥 Inimigo (Objeto 5)
-- **Cor:** Vermelho (1.0, 0.0, 0.0)
-- **Comportamento:** Persegue a nave do jogador
-- **Posição Inicial:** Posição aleatória longe do jogador
-
-#### 🟩 Power-up (Objeto 6)
-- **Cor:** Verde (0.0, 1.0, 0.0)
-- **Tipo:** Tiro Rápido ou Escudo, dependendo da cor
-- **Posição Inicial:** Posições seguras, longe de inimigos
-
-## 🚨 Solução de Problemas
-
-### Erros de Compilação:
-```
-"GLFW/glfw3.h: No such file or directory"
-```
-**Solução:** Verifique se os headers estão em `dependencies/include/GLFW/`
-
-```
-"undefined reference to glfwInit"
-```
-**Solução:** Confirme que `libglfw3.a` está em `dependencies/lib/` e que a task de build está usando `-lglfw3`
-
-```
-"glad.h: No such file or directory"
-```
-**Solução:** Baixe GLAD do site oficial e coloque `glad.h` em `dependencies/include/glad/`
-
-### Erros de Execução:
-```
-"GLFW3.dll not found"
-```
-**Solução:** Copie `glfw3.dll` para a mesma pasta do `app.exe`
-
-```
-"Failed to initialize GLAD"
-```
-**Solução:** Certifique-se que `glad.c` está sendo compilado junto e que o OpenGL 3.3+ está disponível
-
-### Problemas de Portabilidade:
-- **MinGW não encontrado:** Adicione MinGW ao PATH do Windows
-- **VS Code tasks não funcionam:** Verifique se a extensão C/C++ está instalada
-- **Performance baixa:** Certifique-se que drivers gráficos estão atualizados
-
-## 🎯 Exemplo de Saída
-
-O programa abre uma janela **1000x800** pixels com:
-- **Fundo cinza escuro** 
-- **4 objetos geométricos** posicionados nos quadrantes
-- **Objeto ativo** (inicial: triângulo vermelho) com brilho total
-- **Outros objetos** escurecidos a 70%
-- **Instruções** exibidas no console
-
-### Console Output Esperado:
-```
-=== PROJETO 2D OPENGL - TRANSFORMAÇÕES GEOMÉTRICAS ===
-Objetos criados:
-0. Triângulo (Vermelho)
-1. Quadrado (Verde)  
-2. Hexágono (Azul)
-3. Losango (Amarelo)
-
-CONTROLES:
-- W/A/S/D: Mover objeto
-- Q/E: Rotacionar
-- R/F: Escalar
-- TAB: Trocar objeto
-- SPACE: Reset
-- H: Toggle instruções
-- ESC: Sair
-```
-
-## 📚 Documentação Adicional
-
-Para detalhes técnicos completos sobre a implementação, consulte:
-- **`PROJETO_TRANSFORMACOES.md`** - Documentação técnica detalhada
-- **`main.cpp`** - Código fonte comentado
-- **`.vscode/tasks.json`** - Configuração de build
-
-## 🏆 Recursos Educacionais
-
-Este projeto demonstra:
-- ✅ **Fundamentos de OpenGL:** VAO, VBO, EBO, Shaders
-- ✅ **Álgebra Linear:** Matrizes de transformação 4x4
-- ✅ **Geometria Computacional:** Criação de primitivas 2D  
-- ✅ **Programação Gráfica:** Pipeline de renderização
-- ✅ **Interação Humano-Computador:** Sistema de controles intuitivo
-
-Ideal para estudantes de **Computação Gráfica** e **Processamento de Imagens**.
-
-## 🚀 Pipeline de Renderização OpenGL
-
-### 1. **Vertex Shader**
-```glsl
-#version 330 core
-layout (location = 0) in vec3 aPos;
-uniform mat4 transform;
-void main() {
-    gl_Position = transform * vec4(aPos, 1.0);
-}
-```
-- Recebe vértices em coordenadas locais
-- Aplica a matriz de transformação composta
-- Converte para coordenadas de clip space
-
-### 2. **Fragment Shader**
-```glsl
-#version 330 core
-out vec4 FragColor;
-uniform vec3 objectColor;
-uniform float alpha;
-void main() {
-    FragColor = vec4(objectColor, alpha);
-}
-```
-- Define a cor final de cada fragmento
-- Suporta transparência via canal alpha
-- Permite cores diferentes para cada tipo de objeto
-
-### 3. **Aplicação das Transformações**
-```cpp
-// Envio da matriz de transformação para a GPU
-unsigned int transformLoc = glGetUniformLocation(shaderProgram, "transform");
-unsigned int colorLoc = glGetUniformLocation(shaderProgram, "objectColor");
-unsigned int alphaLoc = glGetUniformLocation(shaderProgram, "alpha");
-
-// Para cada objeto
-float transform[16] = {0}; // calculado anteriormente
-float color[3] = {obj.colorR, obj.colorG, obj.colorB};
-float alpha = obj.alpha;
-
-glUniformMatrix4fv(transformLoc, 1, GL_FALSE, transform);
-glUniform3fv(colorLoc, 1, color);
-glUniform1f(alphaLoc, alpha);
-
-// Desenhar objeto
-glBindVertexArray(obj.VAO);
-glDrawElements(GL_TRIANGLES, obj.indices.size(), GL_UNSIGNED_INT, 0);
-```
-- Transferência da matriz de transformação para GPU via uniform
-- Aplicação simultânea de translação, rotação e escala 
-- Renderização de diferentes topologias com o mesmo shader
+**Aprenda AFD jogando! 🏰**
