@@ -4,8 +4,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "g++",
-            "args": [
+            "command": "g++",            "args": [
                 "main.cpp",
                 "dependencies/lib/glad.c",
                 "-o",
@@ -13,6 +12,7 @@
                 "-Idependencies/include",
                 "-Ldependencies/lib",
                 "-lglfw3",
+                "-lfreetype",
                 "-lopengl32",
                 "-lgdi32",
                 "-std=c++17"
