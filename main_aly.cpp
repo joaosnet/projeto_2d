@@ -4,15 +4,16 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
 
-constexpr int WINDOW_WIDTH = 800;
-constexpr int WINDOW_HEIGHT = 600;
+constexpr int WINDOW_WIDTH = 1280;
+constexpr int WINDOW_HEIGHT = 720;
 constexpr float M_PI = 3.14159265358979323846f;
-constexpr float ENEMY_RADIUS = 15.0f * 4.0f; // Aumentado 4x
-constexpr float ENEMY_SPEED = 0.8f / 3.0f;   // Diminuído 1/3
+constexpr float ENEMY_RADIUS = 15.0f * 2.0f; // Inimigo metade do tamanho original
+constexpr float ENEMY_SPEED = 0.8f / 3.0f;   // 1/3 da velocidade original
 constexpr float TOWER_RADIUS = 20.0f;
 constexpr float TOWER_RANGE = 120.0f;
-constexpr float PROJECTILE_SPEED = 3.0f; // Velocidade reduzida para 1/3 do padrão
+constexpr float PROJECTILE_SPEED = 1.0f; // Velocidade reduzida 1/3
 
 struct Point {
     float x, y;
@@ -70,7 +71,8 @@ struct Projectile {
 
     Projectile(Point start, Point end) : position(start), target(end), active(true) {}
 
-    void update() { if (!active) return;
+    void update() {
+        if (!active) return;
         float dx = target.x - position.x;
         float dy = target.y - position.y;
         float dist = std::sqrt(dx * dx + dy * dy);
@@ -85,10 +87,12 @@ struct Projectile {
 };
 
 std::vector<Enemy> enemies;
-std::vector<Tower> towers = {
-    Tower(250, 250), Tower(350, 150), Tower(550, 250), Tower(700, 350)
-};
+std::vector<Tower> towers; // Começa sem torres
 std::vector<Projectile> projectiles;
+
+std::vector<Point> towerSpots = {
+    {280, 280}, {500, 160}, {840, 240}, {1000, 360}
+};
 
 void beginRender() {
     glUseProgram(shaderProgram);
@@ -133,8 +137,7 @@ const char* fragmentShaderSource = R"(
 #version 330 core
 out vec4 FragColor;
 uniform vec4 color;
-void main() { FragColor = color;
-}
+void main() { FragColor = color; }
 )";
 
 unsigned int compileShader(unsigned int type, const char* source) {
@@ -180,6 +183,33 @@ void initOpenGL() {
     glBindVertexArray(0);
 }
 
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        ypos = WINDOW_HEIGHT - ypos;
+        for (auto& spot : towerSpots) {
+            float dx = xpos - spot.x;
+            float dy = ypos - spot.y;
+            if (std::sqrt(dx * dx + dy * dy) < 30.0f) {
+                bool alreadyPlaced = false;
+                for (auto& t : towers) {
+                    float tx = t.position.x - spot.x;
+                    float ty = t.position.y - spot.y;
+                    if (std::sqrt(tx * tx + ty * ty) < 10.0f) {
+                        alreadyPlaced = true;
+                        break;
+                    }
+                }
+                if (!alreadyPlaced) {
+                    towers.emplace_back(spot.x, spot.y);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 int main() {
     if (!glfwInit()) {
         std::cerr << "Falha ao inicializar GLFW\n";
@@ -194,6 +224,8 @@ int main() {
     }
 
     glfwMakeContextCurrent(window);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Falha ao inicializar GLAD\n";
         return -1;
@@ -204,8 +236,7 @@ int main() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     initOpenGL();
 
-    for (int i = 0; i < 3; ++i)
-        enemies.emplace_back();
+    enemies.emplace_back();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -213,8 +244,7 @@ int main() {
         for (auto& e : enemies) e.update();
         for (auto& p : projectiles) p.update();
 
-        projectiles.erase(std::remove_if(projectiles.begin(), projectiles.end(),
-            [](Projectile& p) { return !p.active; }), projectiles.end());
+        projectiles.erase(std::remove_if(projectiles.begin(), projectiles.end(), [](Projectile& p) { return !p.active; }), projectiles.end());
 
         for (auto& p : projectiles) {
             for (auto& e : enemies) {
@@ -222,7 +252,8 @@ int main() {
                 float dx = p.position.x - e.position.x;
                 float dy = p.position.y - e.position.y;
                 float dist = std::sqrt(dx * dx + dy * dy);
-                if (dist < e.radius) { e.health -= 50;
+                if (dist < e.radius) {
+                    e.health -= 50;
                     e.radius *= 0.5f;
                     if (e.health <= 0) e.alive = false;
                     p.active = false;
@@ -230,8 +261,7 @@ int main() {
                 }
             }
         }
-        enemies.erase(std::remove_if(enemies.begin(), enemies.end(),
-            [](Enemy& e) { return !e.alive; }), enemies.end());
+        enemies.erase(std::remove_if(enemies.begin(), enemies.end(), [](Enemy& e) { return !e.alive; }), enemies.end());
 
         for (auto& tower : towers) {
             tower.cooldown -= 1.0f;
@@ -246,12 +276,19 @@ int main() {
                         tower.cooldown = 60.0f;
                         break;
                     }
-                }          }
+                }
+            }
         }
 
         glClearColor(0.82f, 0.88f, 0.82f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         beginRender();
+
+        for (const auto& p : path)
+            drawCircle(p.x, p.y, 6.0f, Color(1.0f, 1.0f, 0.0f, 1.0f)); // Caminho amarelo
+
+        for (auto& spot : towerSpots)
+            drawCircle(spot.x, spot.y, 10.0f, Color(0.0f, 0.0f, 1.0f, 1.0f)); // Pontos de torre
 
         for (auto& tower : towers) {
             drawCircle(tower.position.x, tower.position.y, TOWER_RADIUS, Color(0.2f, 0.2f, 1.0f, 1.0f));

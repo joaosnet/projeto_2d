@@ -44,7 +44,8 @@ struct Character {
     unsigned int Advance;   // Deslocamento horizontal para o próximo glifo
 };
 
-std::map<char, Character> Characters;
+// Altere a definição do mapa Characters para usar int como chave
+std::map<int, Character> Characters;
 FT_Library ft;
 FT_Face face;
 unsigned int textShaderProgram;
@@ -81,18 +82,14 @@ Color hslToRgb(float h, float s, float l) {
       return Color(r, g, b);
 }
 
-struct AFDState {
+// Definição de tipos de torres
+struct TowerType {
     std::string name;
-    bool isFinal;
-    bool isInitial;
     Color color;
-    float towerCost;
-};
-
-struct AFDTransition {
-    std::string fromState;
-    char symbol;
-    std::string toState;
+    float cost;
+    float damage;
+    float range;
+    int fireRate;
 };
 
 // Vertex Shader Source (para formas)
@@ -144,18 +141,39 @@ void main() {
 unsigned int shaderProgram;
 unsigned int VBO, VAO;
 
+// Variáveis para o tamanho da janela (agora são variáveis em vez de constantes)
+int WINDOW_WIDTH = 1000;
+int WINDOW_HEIGHT = 720;
+
 // Constantes do jogo
-const int WINDOW_WIDTH = 1000;
-const int WINDOW_HEIGHT = 720;
-const float TOWER_COST = 50.0f;
-const float TOWER_RANGE = 120.0f;
-const float TOWER_DAMAGE = 20.0f;
-const int TOWER_FIRE_RATE = 75;
+const float TOWER_COST_BASIC = 50.0f;
+const float TOWER_COST_ADVANCED = 70.0f;
+const float TOWER_RANGE_BASIC = 120.0f;
+const float TOWER_RANGE_ADVANCED = 150.0f;
+const float TOWER_DAMAGE_BASIC = 0.35f;
+const float TOWER_DAMAGE_ADVANCED = 0.80f;
+const int TOWER_FIRE_RATE_BASIC = 10;
+const int TOWER_FIRE_RATE_ADVANCED = 50;
 const float ENEMY_HEALTH_BASE = 60.0f;
-const float ENEMY_SPEED_BASE = 0.0003f; // Reduzido de 0.8f para 0.3f
+const float ENEMY_SPEED_BASE = 0.1f;
 const float ENEMY_REWARD_BASE = 10.0f;
 const int ENEMIES_PER_WAVE_BASE = 5;
-const int ENEMY_SPAWN_DELAY = 400; // Frames entre spawns de inimigos
+const int ENEMY_SPAWN_DELAY = 1000; // Reduzido de 700 para 60 (aproximadamente 1 segundo a 60 FPS)
+
+// NOVAS CORES PARA UI E ELEMENTOS
+const Color COLOR_TEXT_UI = Color(0.9f, 0.9f, 0.9f);
+const Color COLOR_PATH = Color(0.2f, 0.25f, 0.3f, 0.8f);
+const Color COLOR_BUTTON_NORMAL = Color(0.25f, 0.3f, 0.35f, 0.7f);
+const Color COLOR_BUTTON_HOVER = Color(0.35f, 0.4f, 0.45f, 0.8f); // Não implementado neste exemplo, mas para referência
+const Color COLOR_BUTTON_SELECTED = Color(0.4f, 0.8f, 1.0f, 0.9f);
+const Color COLOR_FEEDBACK_BG = Color(0.15f, 0.18f, 0.22f, 0.85f);
+const Color COLOR_GAMEOVER_BG = Color(0.1f, 0.1f, 0.1f, 0.9f);
+
+// Tipos de torres disponíveis
+std::map<std::string, TowerType> towerTypes = {
+    {"basic", {"Básica", Color(0.3f, 0.7f, 1.0f), TOWER_COST_BASIC, TOWER_DAMAGE_BASIC, TOWER_RANGE_BASIC, TOWER_FIRE_RATE_BASIC}},
+    {"advanced", {"Avançada", Color(1.0f, 0.6f, 0.2f), TOWER_COST_ADVANCED, TOWER_DAMAGE_ADVANCED, TOWER_RANGE_ADVANCED, TOWER_FIRE_RATE_ADVANCED}}
+};
 
 // Variáveis globais do jogo
 float money = 120.0f;
@@ -169,30 +187,8 @@ int lastEnemySpawnTime = 0;
 int enemiesLeftToSpawn = 0;
 std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
 
-// Caminho dos inimigos
-std::vector<Point> path = {
-    {0, WINDOW_HEIGHT / 2.0f},
-    {150, WINDOW_HEIGHT / 2.0f},
-    {150, 100},
-    {400, 100},
-    {400, 400},
-    {650, 400},
-    {650, WINDOW_HEIGHT / 2.0f},
-    {WINDOW_WIDTH, WINDOW_HEIGHT / 2.0f}
-};
-
-// Estados e transições do AFD
-std::map<std::string, AFDState> afdStates = {
-    {"s0", {"s0", false, true, Color(0.39f, 0.70f, 0.93f), TOWER_COST}}, // Azul claro
-    {"s1", {"s1", true, false, Color(0.96f, 0.68f, 0.33f), TOWER_COST}}  // Laranja
-};
-
-std::vector<AFDTransition> afdTransitions = {
-    {"s0", 'a', "s0"},
-    {"s0", 'b', "s1"},
-    {"s1", 'a', "s0"},
-    {"s1", 'b', "s1"}
-};
+// Caminho dos inimigos (será ajustado dinamicamente com base no tamanho da janela)
+std::vector<Point> path;
 
 // Variáveis de interface
 std::string feedbackMessage = "";
@@ -202,29 +198,27 @@ double mouseX = 0, mouseY = 0;
 std::string currentFeedback;
 float feedbackTimer = 0.0f;
 
+// Função para redimensionar o caminho quando a janela é redimensionada
+void updatePath() {
+    path.clear();
+    path = {
+        {0.0f, static_cast<float>(WINDOW_HEIGHT) / 2.0f},
+        {static_cast<float>(WINDOW_WIDTH) * 0.15f, static_cast<float>(WINDOW_HEIGHT) / 2.0f},
+        {static_cast<float>(WINDOW_WIDTH) * 0.15f, static_cast<float>(WINDOW_HEIGHT) * 0.14f},
+        {static_cast<float>(WINDOW_WIDTH) * 0.4f, static_cast<float>(WINDOW_HEIGHT) * 0.14f},
+        {static_cast<float>(WINDOW_WIDTH) * 0.4f, static_cast<float>(WINDOW_HEIGHT) * 0.56f},
+        {static_cast<float>(WINDOW_WIDTH) * 0.65f, static_cast<float>(WINDOW_HEIGHT) * 0.56f},
+        {static_cast<float>(WINDOW_WIDTH) * 0.65f, static_cast<float>(WINDOW_HEIGHT) / 2.0f},
+        {static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT) / 2.0f}
+    };
+}
+
+// Callback para redimensionamento da janela - apenas declare o protótipo aqui
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+
 void showFeedback(const std::string& message) {
     currentFeedback = message;
     feedbackTimer = 2.0f; // Mensagem ficará visível por 2 segundos
-}
-
-// Função para encontrar transição do AFD
-AFDTransition* getAfdTransition(const std::string& fromState, char symbol) {
-    for (auto& trans : afdTransitions) {
-        if (trans.fromState == fromState && trans.symbol == symbol) {
-            return &trans;
-        }
-    }
-    return nullptr;
-}
-
-// Função para gerar palavra aleatória do AFD
-std::string generateRandomAfdWord(int length = 3) {
-    std::string alphabet = "ab";
-    std::string word = "";
-    for (int i = 0; i < length; i++) {
-        word += alphabet[rng() % alphabet.length()];
-    }
-    return word;
 }
 
 // Classes do jogo
@@ -238,24 +232,18 @@ public:
     float maxHealth;
     float health;
     float reward;
-    std::string afdWord;
-    int currentSymbolIndex;
-    bool wordProcessed;
 
     Enemy(int wave) {
         position = path[0];
         pathIndex = 0;
         radius = 15.0f;
-        // Cor aleatória usando HSL como no original
+        // Cor aleatória usando HSL, ajustada para ser mais vibrante
         float hue = rng() % 360;
-        color = hslToRgb(hue, 0.6f, 0.55f);
-        speed = ENEMY_SPEED_BASE + (wave * 0.05f);
+        color = hslToRgb(hue, 0.7f, 0.6f); // Saturação e luminosidade ajustadas
+        speed = ENEMY_SPEED_BASE + (wave * 0.0005f * ENEMY_SPEED_BASE); // Ajuste mais sutil na velocidade
         maxHealth = ENEMY_HEALTH_BASE + (wave * 15);
         health = maxHealth;
         reward = ENEMY_REWARD_BASE + (wave * 2);
-        afdWord = generateRandomAfdWord((rng() % 3) + 2);
-        currentSymbolIndex = 0;
-        wordProcessed = false;
     }
 
     void update() {
@@ -287,15 +275,6 @@ public:
             money += reward;
         }
     }
-
-    void processSymbol() {
-        if (currentSymbolIndex < afdWord.length()) {
-            currentSymbolIndex++;
-            if (currentSymbolIndex >= afdWord.length()) {
-                wordProcessed = true;
-            }
-        }
-    }
 };
 
 class Projectile {
@@ -306,19 +285,19 @@ public:
     Color color;
     float speed;
     float damage;
-    char processedSymbol;
     bool hasHit;
 
-    Projectile(Point start, Enemy* target, float damage, const std::string& towerState, char symbol) {
+    Projectile(Point start, Enemy* target, float damage, Color color) {
         position = start;
         this->target = target;
         radius = 5.0f;
-        color = afdStates[towerState].color;
+        this->color = color;
         speed = 6.0f;
         this->damage = damage;
-        processedSymbol = symbol;
         hasHit = false;
-    }    void update() {
+    }
+    
+    void update() {
         if (hasHit || !target || target->health <= 0) {
             damage = 0;
             return;
@@ -329,15 +308,7 @@ public:
         float distance = sqrt(dx * dx + dy * dy);
 
         if (distance < speed) {
-            // Simplificado: sempre causa dano ao atingir o alvo
             target->takeDamage(damage);
-            
-            // Verificar se deve processar símbolo (sistema AFD opcional)
-            if (!target->wordProcessed && target->currentSymbolIndex < target->afdWord.length() &&
-                target->afdWord[target->currentSymbolIndex] == processedSymbol) {
-                target->processSymbol();
-            }
-            
             hasHit = true;
             damage = 0;
         } else {
@@ -349,36 +320,51 @@ public:
 
 class Tower {
 public:
-    Point position;
-    std::string afdStateName;
-    AFDState stateDetails;
+    Point position;         // Posição atual em pixels
+    Point normalizedPos;    // Posição normalizada (0.0-1.0)
+    std::string typeName;
+    TowerType typeDetails;
     float radius;
+    float normalizedRadius; // Raio normalizado em relação à altura da janela
     Color color;
     float range;
+    float normalizedRange;  // Alcance normalizado em relação à altura da janela
     float damage;
     int fireRate;
     int lastShotTime;
     Enemy* target;
 
-    Tower(float x, float y, const std::string& stateName) {
+    Tower(float x, float y, const std::string& typeName) {
+        // Armazenar coordenadas normalizadas
+        normalizedPos.x = x / static_cast<float>(WINDOW_WIDTH);
+        normalizedPos.y = y / static_cast<float>(WINDOW_HEIGHT);
         position = Point(x, y);
-        afdStateName = stateName;
-        stateDetails = afdStates[stateName];
+        
+        this->typeName = typeName;
+        typeDetails = towerTypes[typeName];
+        
+        // Calcular raio normalizado (em relação à altura da janela)
+        normalizedRadius = 20.0f / static_cast<float>(WINDOW_HEIGHT);
         radius = 20.0f;
-        color = stateDetails.color;
-        range = TOWER_RANGE;
-        damage = TOWER_DAMAGE;
-        fireRate = TOWER_FIRE_RATE;
+        
+        color = typeDetails.color;
+        
+        // Calcular alcance normalizado
+        normalizedRange = typeDetails.range / static_cast<float>(WINDOW_HEIGHT);
+        range = typeDetails.range;
+        
+        damage = typeDetails.damage;
+        fireRate = typeDetails.fireRate;
         lastShotTime = 0;
         target = nullptr;
     }
 
-    bool canAttack(Enemy* enemy) {
-        if (enemy->wordProcessed || enemy->currentSymbolIndex >= enemy->afdWord.length()) {
-            return false;
-        }
-        char currentSymbol = enemy->afdWord[enemy->currentSymbolIndex];
-        return getAfdTransition(afdStateName, currentSymbol) != nullptr;
+    // Atualizar a posição e dimensões com base no tamanho atual da janela
+    void updateDimensions() {
+        position.x = normalizedPos.x * static_cast<float>(WINDOW_WIDTH);
+        position.y = normalizedPos.y * static_cast<float>(WINDOW_HEIGHT);
+        radius = normalizedRadius * static_cast<float>(WINDOW_HEIGHT);
+        range = normalizedRange * static_cast<float>(WINDOW_HEIGHT);
     }
 
     void findTarget(std::vector<Enemy>& enemies) {
@@ -392,7 +378,7 @@ public:
             float dy = enemy.position.y - position.y;
             float distance = sqrt(dx * dx + dy * dy);
 
-            if (distance < range && canAttack(&enemy)) {
+            if (distance < range) {
                 if (distance < closestDistance) {
                     closestDistance = distance;
                     target = &enemy;
@@ -402,10 +388,8 @@ public:
     }
 
     void shoot(std::vector<Projectile>& projectiles, int frame) {
-        if (target && target->health > 0 && canAttack(target) && 
-            (frame - lastShotTime >= fireRate)) {
-            char symbol = target->afdWord[target->currentSymbolIndex];
-            projectiles.emplace_back(position, target, damage, afdStateName, symbol);
+        if (target && target->health > 0 && (frame - lastShotTime >= fireRate)) {
+            projectiles.emplace_back(position, target, damage, color);
             lastShotTime = frame;
         }
     }
@@ -421,11 +405,28 @@ std::vector<Enemy> enemies;
 std::vector<Tower> towers;
 std::vector<Projectile> projectiles;
 
+// Agora adicione a função updateTowerDimensions() aqui, depois da declaração de 'towers'
+void updateTowerDimensions() {
+    for (auto& tower : towers) {
+        tower.updateDimensions();
+    }
+}
+
+// Implementação completa do callback de redimensionamento
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    WINDOW_WIDTH = width;
+    WINDOW_HEIGHT = height;
+    glViewport(0, 0, width, height);
+    updatePath();
+    updateTowerDimensions();
+}
+
 // Declarar protótipos de funções
 void setProjectionMatrix(unsigned int currentShaderProgram);
 void drawCircle(float x, float y, float radius, Color color);
 void drawRectangle(float x, float y, float width, float height, Color color);
 void drawLine(Point start, Point end, Color color, float width);
+void drawHexagon(float x, float y, float radius, Color color); // Novo protótipo
 void RenderText(const std::string& text, float x, float y_baseline, float scale, Color color);
 void initTextRendering();
 void initOpenGL();
@@ -483,6 +484,9 @@ unsigned int createAndLinkShaderProgram(const char* vsSource, const char* fsSour
     return program;
 }
 
+// Adicione esta constante antes da função initTextRendering
+const std::string EXTENDED_CHARS = "áàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ";
+
 // Modificar a função initTextRendering para criar o shader program e VAO/VBO
 void initTextRendering() {
     // Inicializar FreeType
@@ -503,12 +507,15 @@ void initTextRendering() {
 
     // Definir tamanho da fonte
     FT_Set_Pixel_Sizes(face, 0, FONT_PIXEL_HEIGHT_LOAD);
+    
+    // Ativar suporte a Unicode
+    FT_Select_Charmap(face, FT_ENCODING_UNICODE);
 
     // Configurar OpenGL
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     // Gerar texturas para os primeiros 128 caracteres ASCII
-    for (unsigned char c = 0; c < 128; c++) {
+    for (int c = 0; c < 128; c++) {
         // Carregar caractere
         if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
             std::cout << "ERRO::FREETYPE: Falha ao carregar glifo " << c << std::endl;
@@ -544,7 +551,52 @@ void initTextRendering() {
             Point(face->glyph->bitmap_left, face->glyph->bitmap_top),
             (unsigned int)face->glyph->advance.x
         };
-        Characters.insert(std::pair<char, Character>(c, character));
+        Characters.insert(std::pair<int, Character>(c, character));
+    }
+
+    // Lista de caracteres especiais para pré-carregar
+    const wchar_t specialChars[] = L"áàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ";
+    
+    // Adicionar caracteres especiais do português
+    for (int i = 0; specialChars[i] != L'\0'; i++) {
+        wchar_t c = specialChars[i];
+        
+        // Carregar caractere
+        if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
+            std::cout << "ERRO::FREETYPE: Falha ao carregar glifo especial " << (int)c << std::endl;
+            continue;
+        }
+
+        // Gerar textura
+        unsigned int texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RED,
+            face->glyph->bitmap.width,
+            face->glyph->bitmap.rows,
+            0,
+            GL_RED,
+            GL_UNSIGNED_BYTE,
+            face->glyph->bitmap.buffer
+        );
+
+        // Definir opções de textura
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // Armazenar caractere para uso posterior usando o valor Unicode como chave
+        Character character = {
+            texture,
+            Point(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+            Point(face->glyph->bitmap_left, face->glyph->bitmap_top),
+            (unsigned int)face->glyph->advance.x
+        };
+        Characters.insert(std::pair<int, Character>((int)c, character));
     }
 
     // Criar o shader program para texto
@@ -562,7 +614,36 @@ void initTextRendering() {
     glBindVertexArray(0);
 }
 
-// Substituir a função RenderText com a implementação correta
+// Função auxiliar para obter o próximo ponto de código UTF-8
+int utf8_next(const std::string& str, size_t& pos) {
+    if (pos >= str.length()) return 0;
+    
+    unsigned char c = str[pos++];
+    
+    // ASCII comum (0-127)
+    if (c < 128) return c;
+    
+    // Obter o número de bytes adicionais
+    int extra = 0;
+    if ((c & 0xE0) == 0xC0) extra = 1;      // 110xxxxx
+    else if ((c & 0xF0) == 0xE0) extra = 2; // 1110xxxx
+    else if ((c & 0xF8) == 0xF0) extra = 3; // 11110xxx
+    else return '?';  // Formato inválido
+    
+    // Calcular o ponto de código
+    int codepoint = (c & (0x3F >> extra));
+    
+    // Ler bytes adicionais
+    for (int i = 0; i < extra && pos < str.length(); i++) {
+        c = str[pos++];
+        if ((c & 0xC0) != 0x80) return '?'; // Formato inválido
+        codepoint = (codepoint << 6) | (c & 0x3F);
+    }
+    
+    return codepoint;
+}
+
+// Substituir a função RenderText com a implementação correta para Unicode
 void RenderText(const std::string& text, float x, float y_baseline, float scale, Color color) {
     // Ativar o shader correspondente
     glUseProgram(textShaderProgram);
@@ -570,14 +651,22 @@ void RenderText(const std::string& text, float x, float y_baseline, float scale,
     
     glUniform3f(glGetUniformLocation(textShaderProgram, "textColor"), color.r, color.g, color.b);
     glActiveTexture(GL_TEXTURE0);
-    // Corrigir: Definir a uniform textSampler para usar a textura ativa
     glUniform1i(glGetUniformLocation(textShaderProgram, "textSampler"), 0);
     glBindVertexArray(textVAO);
 
-    // Iterar por todos os caracteres
-    std::string::const_iterator c;
-    for (c = text.begin(); c != text.end(); c++) {
-        Character ch = Characters[*c];
+    // Percorrer a string usando a função auxiliar para caracteres UTF-8
+    size_t pos = 0;
+    while (pos < text.length()) {
+        int codepoint = utf8_next(text, pos);
+        if (codepoint == 0) break;
+
+        // Verificar se temos este caractere carregado
+        if (Characters.find(codepoint) == Characters.end()) {
+            x += (Characters['?'].Advance >> 6) * scale; // Corrigido: primeiro faz o shift, depois multiplica
+            continue;
+        }
+
+        Character ch = Characters[codepoint];
 
         float xpos = x + ch.Bearing.x * scale;
         float ypos = y_baseline - (ch.Size.y - ch.Bearing.y) * scale;
@@ -607,8 +696,8 @@ void RenderText(const std::string& text, float x, float y_baseline, float scale,
         // Renderizar quad
         glDrawArrays(GL_TRIANGLES, 0, 6);
         
-        // Avançar para o próximo glifo (note que advance é número de 1/64 pixels)
-        x += (ch.Advance >> 6) * scale; // bitshift por 6 para obter valor em pixels (2^6 = 64)
+        // Avançar para o próximo glifo
+        x += (ch.Advance >> 6) * scale; // Corrigido: primeiro faz o shift, depois multiplica
     }
     
     glBindVertexArray(0);
@@ -662,6 +751,38 @@ void drawCircle(float x, float y, float radius, Color color) {
     
     glDrawArrays(GL_TRIANGLE_FAN, 0, vertices.size() / 2);
     
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+// Nova função para desenhar hexágono
+void drawHexagon(float x, float y, float radius, Color color) {
+    const int segments = 6; // Um hexágono tem 6 lados
+    std::vector<float> vertices;
+
+    // Centro (para TRIANGLE_FAN)
+    vertices.push_back(x);
+    vertices.push_back(y);
+
+    // Pontos do hexágono
+    for (int i = 0; i <= segments; i++) { // <= para fechar o hexágono
+        float angle = 2.0f * (float)M_PI * i / segments + (M_PI / 6.0f); // Adiciona rotação para alinhar a base
+        vertices.push_back(x + cos(angle) * radius);
+        vertices.push_back(y + sin(angle) * radius);
+    }
+
+    glUseProgram(shaderProgram);
+    setProjectionMatrix(shaderProgram);
+
+    int colorLoc = glGetUniformLocation(shaderProgram, "color");
+    glUniform4f(colorLoc, color.r, color.g, color.b, color.a);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_DRAW);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, vertices.size() / 2);
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
@@ -748,6 +869,20 @@ void startWave() {
 }
 
 bool canPlaceTower(float x, float y) {
+    const float TOWER_COST_BASIC = 50.0f;
+const float TOWER_COST_ADVANCED = 70.0f;
+const float TOWER_RANGE_BASIC = 120.0f;
+const float TOWER_RANGE_ADVANCED = 150.0f;
+const float TOWER_DAMAGE_BASIC = 0.35f;
+const float TOWER_DAMAGE_ADVANCED = 0.80f;
+const int TOWER_FIRE_RATE_BASIC = 10;
+const int TOWER_FIRE_RATE_ADVANCED = 50;
+const float ENEMY_HEALTH_BASE = 60.0f;
+const float ENEMY_SPEED_BASE = 0.003f;
+const float ENEMY_REWARD_BASE = 10.0f;
+const int ENEMIES_PER_WAVE_BASE = 5;
+const int ENEMY_SPAWN_DELAY = 700; // Frames entre spawns de inimigos
+
     const float TOWER_PLACEMENT_MIN_DIST_PATH = 30.0f;
     const float TOWER_PLACEMENT_MIN_DIST_TOWER = 40.0f;
 
@@ -762,7 +897,7 @@ bool canPlaceTower(float x, float y) {
         }
     }
 
-    // Verificar distância do caminho (simplificado)
+    // Verificar distância do caminho
     for (int i = 0; i < path.size() - 1; i++) {
         Point p1 = path[i];
         Point p2 = path[i + 1];
@@ -782,9 +917,9 @@ bool canPlaceTower(float x, float y) {
 void placeTower(float x, float y) {
     if (placingTowerType.empty() || gameOver) return;
     
-    if (money >= afdStates[placingTowerType].towerCost && canPlaceTower(x, y)) {
+    if (money >= towerTypes[placingTowerType].cost && canPlaceTower(x, y)) {
         towers.emplace_back(x, y, placingTowerType);
-        money -= afdStates[placingTowerType].towerCost;
+        money -= towerTypes[placingTowerType].cost;
         placingTowerType = "";
         showFeedback("Torre colocada com sucesso!");
     }
@@ -793,11 +928,11 @@ void placeTower(float x, float y) {
 void selectTowerType(const std::string& type) {
     if (gameOver) return;
     
-    if (money >= afdStates[type].towerCost) {
+    if (money >= towerTypes[type].cost) {
         placingTowerType = type;
-        showFeedback("Torre " + type + " selecionada. Clique para colocar.");
+        showFeedback("Torre " + towerTypes[type].name + " selecionada. Clique para colocar.");
     } else {
-        showFeedback("Dinheiro insuficiente para Torre " + type + ".");
+        showFeedback("Dinheiro insuficiente para Torre " + towerTypes[type].name + ".");
     }
 }
 
@@ -849,6 +984,7 @@ void update() {
 }
 
 void render() {
+    glClearColor(0.1f, 0.12f, 0.15f, 1.0f); // Nova cor de fundo
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_BLEND); // Habilitar blend para texto e formas transparentes
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -865,7 +1001,8 @@ void render() {
     for (const auto& projectile : projectiles) {
         drawProjectile(projectile);
     }
-      // Desenhar inimigos
+    
+    // Desenhar inimigos
     for (const auto& enemy : enemies) {
         drawEnemy(enemy);
     }
@@ -878,37 +1015,25 @@ void render() {
         // Inverter Y para coordenadas OpenGL
         mouseY_local = WINDOW_HEIGHT - mouseY_local;
         
-        Color previewColor = afdStates[placingTowerType].color;
-        previewColor.a = 0.5f;
-        drawCircle((float)mouseX_local, (float)mouseY_local, 20.0f, previewColor);
+        // Ajustar o raio e alcance proporcionalmente ao tamanho da janela
+        float heightRatio = static_cast<float>(WINDOW_HEIGHT) / 720.0f;
+        float previewRadius = 20.0f * heightRatio;
+        float previewRange = towerTypes[placingTowerType].range * heightRatio;
         
-        // Desenhar alcance (círculo)
-        const int segments = 32;
-        std::vector<float> vertices_range;
-        for (int i = 0; i <= segments; i++) {
-            float angle = 2.0f * (float)M_PI * i / segments;
-            vertices_range.push_back((float)mouseX_local + cos(angle) * TOWER_RANGE);
-            vertices_range.push_back((float)mouseY_local + sin(angle) * TOWER_RANGE);
-        }
+        // Primeiro desenhar o círculo de alcance (mais transparente)
+        Color rangeColor(0.5f, 0.5f, 0.5f, 0.3f); // Cor mais visível para o range
+        drawCircle((float)mouseX_local, (float)mouseY_local, previewRange, rangeColor);
         
-        glUseProgram(shaderProgram);
-        setProjectionMatrix(shaderProgram);
+        // Depois desenhar a torre
+        Color previewColor = towerTypes[placingTowerType].color;
+        previewColor.a = 0.7f; // Aumentar opacidade
+        drawCircle((float)mouseX_local, (float)mouseY_local, previewRadius, previewColor);
         
-        int colorLoc = glGetUniformLocation(shaderProgram, "color");
-        glUniform4f(colorLoc, 0.0f, 0.0f, 0.0f, 0.3f);
-        
-        glBindVertexArray(VAO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, vertices_range.size() * sizeof(float), vertices_range.data(), GL_DYNAMIC_DRAW);
-        
-        glDrawArrays(GL_LINE_LOOP, 0, vertices_range.size() / 2);
-        
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        // Não precisamos mais desenhar o contorno separadamente já que o círculo de range já está visível
     }
     
     // Desenhar interface
-    drawUI(); // drawUI agora usa RenderText que configura seu próprio shader e blend
+    drawUI();
 }
 
 // Callbacks do GLFW
@@ -925,10 +1050,10 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (action == GLFW_PRESS) {
         switch (key) {
             case GLFW_KEY_1:
-                selectTowerType("s0");
+                selectTowerType("basic");
                 break;
             case GLFW_KEY_2:
-                selectTowerType("s1");
+                selectTowerType("advanced");
                 break;
             case GLFW_KEY_SPACE:
                 startWave();
@@ -953,8 +1078,17 @@ int main() {
         return -1;
     }
 
+    // Obter a resolução do monitor primário
+    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
+    WINDOW_WIDTH = mode->width;
+    WINDOW_HEIGHT = mode->height;
+
+    // Definir dicas para a janela
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+
     // Criar janela
-    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Defesa da Torre com Torres AFD", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Tower Defense", NULL, NULL);
     if (!window) {
         std::cerr << "Falha ao criar janela" << std::endl;
         glfwTerminate();
@@ -967,10 +1101,16 @@ int main() {
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Falha ao inicializar GLAD" << std::endl;
         return -1;
-    }    // Configurar callbacks
+    }
+    
+    // Configurar callbacks
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetKeyCallback(window, keyCallback);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
+    // Obter o tamanho real da janela após a maximização
+    glfwGetFramebufferSize(window, &WINDOW_WIDTH, &WINDOW_HEIGHT);
+    
     // Configurar OpenGL
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
     
@@ -979,21 +1119,25 @@ int main() {
     
     glClearColor(0.82f, 0.88f, 0.82f, 1.0f); // Verde claro
 
+    // Inicializar o caminho com base no tamanho da janela
+    updatePath();
+
     // Inicializar renderização moderna
     initOpenGL();
 
     // Inicializar jogo
     initGame();
 
-    std::cout << "=== Defesa da Torre com Torres AFD ===" << std::endl;
+    std::cout << "=== Tower Defense ===" << std::endl;
     std::cout << "Controles:" << std::endl;
-    std::cout << "1 - Selecionar Torre S0" << std::endl;
-    std::cout << "2 - Selecionar Torre S1" << std::endl;
+    std::cout << "1 - Selecionar Torre Básica" << std::endl;
+    std::cout << "2 - Selecionar Torre Avançada" << std::endl;
     std::cout << "Espaço - Iniciar Onda" << std::endl;
     std::cout << "R - Reiniciar (quando game over)" << std::endl;
     std::cout << "ESC - Cancelar seleção de torre" << std::endl;
     std::cout << "Clique para colocar torre selecionada" << std::endl;
     std::cout << std::endl;
+    std::cout << "Resolução da janela: " << WINDOW_WIDTH << "x" << WINDOW_HEIGHT << std::endl;
     std::cout << "Dinheiro: " << money << " | Vidas: " << lives << " | Onda: " << currentWave << std::endl;
 
     // Loop principal
@@ -1050,205 +1194,165 @@ int main() {
 void initOpenGL() {
     // Criar shader program para formas
     shaderProgram = createAndLinkShaderProgram(vertexShaderSource, fragmentShaderSource);
-    
+
+    // Configurar VAO e VBO para formas
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    // Não precisa de glBufferData aqui, será feito em cada draw call
     glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    initTextRendering(); // Inicializar renderização de texto com FreeType
+    // Inicializar renderização de texto (já faz seu próprio shader, VAO, VBO)
+    initTextRendering();
+
+    // Definir cor de fundo inicial (será sobrescrita em render())
+    glClearColor(0.1f, 0.12f, 0.15f, 1.0f);
 }
 
 // Implementação das funções que estavam faltando
 void drawPath() {
-    for (int i = 0; i < path.size() - 1; i++) {
-        drawLine(path[i], path[i + 1], Color(0.63f, 0.67f, 0.75f), 20.0f);
+    for (size_t i = 0; i < path.size() - 1; ++i) {
+        drawLine(path[i], path[i+1], COLOR_PATH, 5.0f); // Usar nova cor e espessura
     }
 }
 
 void drawEnemy(const Enemy& enemy) {
-    // Corpo do inimigo
     drawCircle(enemy.position.x, enemy.position.y, enemy.radius, enemy.color);
-    
-    // Contorno preto
-    const int segments = 32;
-    std::vector<float> vertices;
-    for (int i = 0; i <= segments; i++) {
-        float angle = 2.0f * (float)M_PI * i / segments;
-        vertices.push_back(enemy.position.x + cos(angle) * enemy.radius);
-        vertices.push_back(enemy.position.y + sin(angle) * enemy.radius);
-    }
-    
-    glUseProgram(shaderProgram);
-    setProjectionMatrix(shaderProgram);
-    int colorLoc = glGetUniformLocation(shaderProgram, "color");
-    glUniform4f(colorLoc, 0, 0, 0, 1);
-    
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_DRAW);
-    glDrawArrays(GL_LINE_LOOP, 0, vertices.size() / 2);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    
     // Barra de vida
-    float healthBarWidth = enemy.radius * 1.5f;
-    float healthBarHeight = 5.0f;
     float healthPercentage = enemy.health / enemy.maxHealth;
-    
-    float barX = enemy.position.x - healthBarWidth / 2;
-    float barY = enemy.position.y - enemy.radius - 12;
-    
-    drawRectangle(barX, barY, healthBarWidth, healthBarHeight, Color(1, 0, 0));
-    drawRectangle(barX, barY, healthBarWidth * healthPercentage, healthBarHeight, Color(0, 1, 0));
-    
-    // Palavra AFD com símbolo atual destacado
-    std::string wordDisplay = "";
-    for (int i = 0; i < enemy.afdWord.length(); i++) {
-        if (i == enemy.currentSymbolIndex && !enemy.wordProcessed) {
-            wordDisplay += "[";
-            wordDisplay += enemy.afdWord[i];
-            wordDisplay += "]";
-        } else {
-            wordDisplay += enemy.afdWord[i];
-        }
-    }
-    
-    if (enemy.wordProcessed) {
-        wordDisplay = enemy.afdWord + " (+)";
-    }
-    
-    float enemy_text_scale = 0.5f;
-    float ascender_offset = (FONT_PIXEL_HEIGHT_LOAD * 0.75f) * enemy_text_scale;
-    float textX = enemy.position.x - (wordDisplay.length() * 5.0f * enemy_text_scale);
-    float textY_baseline = enemy.position.y + enemy.radius + 10 + ascender_offset;
-    
-    RenderText(wordDisplay, textX, textY_baseline, enemy_text_scale, Color(0, 0, 0));
+    float barWidth = enemy.radius * 1.5f;
+    float barHeight = 5.0f;
+    float barX = enemy.position.x - barWidth / 2.0f;
+    float barY = enemy.position.y + enemy.radius + 5.0f; // Acima do inimigo
+
+    drawRectangle(barX, barY, barWidth, barHeight, Color(0.2f, 0.2f, 0.2f)); // Fundo da barra
+    drawRectangle(barX, barY, barWidth * healthPercentage, barHeight, Color(0.0f, 1.0f, 0.0f)); // Vida atual
 }
 
 void drawTower(const Tower& tower) {
-    // Corpo da torre
-    drawCircle(tower.position.x, tower.position.y, tower.radius, tower.color);
+    float baseRadius = tower.radius * 1.1f; // Raio da base hexagonal um pouco maior
+    float topRadius = tower.radius * 0.7f;  // Raio do círculo do topo
+    float platformOffsetY = tower.radius * 0.3f; // Deslocamento Y para o topo
+
+    // Cor da base (um pouco mais escura)
+    Color baseColor = Color(tower.color.r * 0.8f, tower.color.g * 0.8f, tower.color.b * 0.8f, tower.color.a);
+    // Cor do topo (cor original)
+    Color topColor = tower.color;
+
+    // Desenhar a base hexagonal
+    drawHexagon(tower.position.x, tower.position.y - platformOffsetY / 2, baseRadius, baseColor);
+
+    // Desenhar o topo circular (plataforma)
+    // Simular uma pequena perspectiva deslocando um pouco para cima
+    drawCircle(tower.position.x, tower.position.y + platformOffsetY, topRadius, topColor);
     
-    // Contorno preto
-    const int segments = 32;
-    std::vector<float> vertices;
-    for (int i = 0; i <= segments; i++) {
-        float angle = 2.0f * (float)M_PI * i / segments;
-        vertices.push_back(tower.position.x + cos(angle) * tower.radius);
-        vertices.push_back(tower.position.y + sin(angle) * tower.radius);
-    }
-    
-    glUseProgram(shaderProgram);
-    setProjectionMatrix(shaderProgram);
-    int colorLoc = glGetUniformLocation(shaderProgram, "color");
-    glUniform4f(colorLoc, 0, 0, 0, 1);
-    glLineWidth(2.0f);
-    
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_DRAW);
-    glDrawArrays(GL_LINE_LOOP, 0, vertices.size() / 2);
-    glLineWidth(1.0f);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    
-    // Nome do estado na torre
-    std::string stateName = tower.afdStateName;
-    std::transform(stateName.begin(), stateName.end(), stateName.begin(), ::toupper);
-    
-    float tower_text_scale = 0.6f;
-    float ascender_offset = (FONT_PIXEL_HEIGHT_LOAD * 0.75f) * tower_text_scale;
-    float textX = tower.position.x - (stateName.length() * 4.0f * tower_text_scale);
-    float textY_baseline = tower.position.y - 4 + ascender_offset;
-    
-    RenderText(stateName, textX, textY_baseline, tower_text_scale, Color(0, 0, 0));
-    
-    // Linha para o alvo
-    if (tower.target && tower.target->health > 0 && !tower.target->wordProcessed) {
-        drawLine(tower.position, tower.target->position, Color(0.29f, 0.33f, 0.41f), 2.0f);
-    }
+    // Desenhar um círculo interno menor no topo para detalhe
+    drawCircle(tower.position.x, tower.position.y + platformOffsetY, topRadius * 0.6f, Color(topColor.r * 0.7f, topColor.g * 0.7f, topColor.b * 0.7f));
+
+
+    // Desenhar alcance (círculo) se a torre estiver selecionada ou o mouse estiver sobre ela (simplificado aqui)
+    // if (placingTowerType.empty() && /* mouse over tower, ou torre selecionada */ ) {
+    //     // ... código para desenhar alcance ...
+    // }
 }
 
 void drawProjectile(const Projectile& projectile) {
+    // Projétil com um pequeno brilho/rastro (simulado com dois círculos)
     drawCircle(projectile.position.x, projectile.position.y, projectile.radius, projectile.color);
+    drawCircle(projectile.position.x, projectile.position.y, projectile.radius * 0.5f, Color(1.0f, 1.0f, 1.0f, 0.8f)); // Miolo branco
 }
 
 void drawUI() {
-    // Fundo da barra de informações
-    drawRectangle(0, WINDOW_HEIGHT - 60, WINDOW_WIDTH, 60, Color(1.0f, 1.0f, 1.0f, 0.9f));
-    
-    // Bordas da barra
-    drawLine(Point(0, WINDOW_HEIGHT - 60), Point(WINDOW_WIDTH, WINDOW_HEIGHT - 60), Color(0.29f, 0.33f, 0.41f), 2.0f);
-    
-    // Informações do jogo
-    std::stringstream ss;
-    float ui_text_scale = 0.8f;
-    float ascender_offset = (FONT_PIXEL_HEIGHT_LOAD * 0.75f) * ui_text_scale;
+    float uiMargin = 20.0f;
+    float lineHeight = 30.0f; // Aumentado de 25.0f para 30.0f
+    float currentY = WINDOW_HEIGHT - uiMargin - lineHeight;
+    float scale = 0.8f; // Aumentado de 0.45f para 0.8f para textos maiores
 
-    // Dinheiro
-    ss.str("");
-    ss << "Dinheiro: " << (int)money;
-    RenderText(ss.str(), 20, (WINDOW_HEIGHT - 50) + ascender_offset, ui_text_scale, Color(0.18f, 0.22f, 0.28f));
-    
-    // Vidas
-    ss.str("");
-    ss << "Vidas: " << lives;
-    RenderText(ss.str(), 200, (WINDOW_HEIGHT - 50) + ascender_offset, ui_text_scale, Color(0.18f, 0.22f, 0.28f));
-    
-    // Onda
-    ss.str("");
-    ss << "Onda: " << currentWave;
-    RenderText(ss.str(), 350, (WINDOW_HEIGHT - 50) + ascender_offset, ui_text_scale, Color(0.18f, 0.22f, 0.28f));
-    
-    // Status da torre sendo colocada
-    if (!placingTowerType.empty()) {
-        ss.str("");
-        ss << "Colocando Torre " << placingTowerType << " (ESC para cancelar)";
-        RenderText(ss.str(), 500, (WINDOW_HEIGHT - 50) + ascender_offset, ui_text_scale * 0.75f, Color(0.18f, 0.22f, 0.28f));
-    }
-    
-    // Controles na parte inferior
-    float controls_text_scale = 0.6f;
-    ascender_offset = (FONT_PIXEL_HEIGHT_LOAD * 0.75f) * controls_text_scale;
-    RenderText("1: Torre S0  2: Torre S1  ESPACO: Iniciar Onda", 20, (WINDOW_HEIGHT - 25) + ascender_offset, controls_text_scale, Color(0.18f, 0.22f, 0.28f));
-    
-    // Feedback do AFD
-    if (feedbackTimer > 0) {
-        float feedback_text_scale = 0.7f;
-        ascender_offset = (FONT_PIXEL_HEIGHT_LOAD * 0.75f) * feedback_text_scale;
-        float feedbackY_baseline = 50 + ascender_offset; 
-        float feedbackX = 50;
+    // Informações do Jogador (Canto Superior Esquerdo)
+    std::stringstream moneyStream, livesStream, waveStream;
+    moneyStream << std::fixed << std::setprecision(0) << money;
+    RenderText("Dinheiro: " + moneyStream.str(), uiMargin, currentY, scale, COLOR_TEXT_UI);
+    currentY -= lineHeight;
+    RenderText("Vidas: " + std::to_string(lives), uiMargin, currentY, scale, COLOR_TEXT_UI);
+    currentY -= lineHeight;
+    RenderText("Onda: " + std::to_string(currentWave), uiMargin, currentY, scale, COLOR_TEXT_UI);
 
-        RenderText(currentFeedback, feedbackX, feedbackY_baseline, feedback_text_scale, Color(0.88f, 0.92f, 0.94f));
+    // Botões de Torre (Inferior Central)
+    float buttonWidth = 180.0f; // Aumentado de 150.0f para 180.0f
+    float buttonHeight = 50.0f; // Aumentado de 40.0f para 50.0f
+    float buttonSpacing = 25.0f; // Aumentado de 20.0f para 25.0f
+    float totalButtonWidth = (towerTypes.size() * buttonWidth) + ((towerTypes.size() - 1) * buttonSpacing);
+    float startX = (WINDOW_WIDTH - totalButtonWidth) / 2.0f;
+    float buttonY = uiMargin + buttonHeight; // Posição Y a partir da base
+    
+    // Calcular textY fora do loop para que esteja disponível para todos os botões
+    float textY = buttonY - buttonHeight / 2.0f - (Characters['A'].Size.y * scale / 3.0f); // Ajuste para centralizar
+
+    int i = 0;
+    for (const auto& pair : towerTypes) {
+        float currentButtonX = startX + i * (buttonWidth + buttonSpacing);
+        Color buttonColor = (placingTowerType == pair.first) ? COLOR_BUTTON_SELECTED : COLOR_BUTTON_NORMAL;
         
-        feedbackTimer -= 0.016f;
+        drawRectangle(currentButtonX, buttonY - buttonHeight, buttonWidth, buttonHeight, buttonColor); // Y ajustado para desenhar para cima
+        
+        std::string buttonText = pair.second.name + " ($ " + std::to_string(static_cast<int>(pair.second.cost)) + ")";
+        // Centralizar texto no botão
+        RenderText(buttonText, currentButtonX + 15.0f, textY, scale, COLOR_TEXT_UI);
+        i++;
     }
     
-    // Game Over ou Vitória
+    // Botão Iniciar Onda (Canto Inferior Direito)
+    if (!waveInProgress && !gameOver) {
+        float startWaveButtonX = WINDOW_WIDTH - buttonWidth - uiMargin;
+        drawRectangle(startWaveButtonX, buttonY - buttonHeight, buttonWidth, buttonHeight, COLOR_BUTTON_NORMAL);
+        RenderText("Iniciar Onda (Espaço)", startWaveButtonX + 10.0f, textY, scale, COLOR_TEXT_UI);
+    }
+
+    // Mensagem de Feedback (Centralizada na parte superior)
+    if (feedbackTimer > 0.0f) {
+        feedbackTimer -= 1.0f / 60.0f; // Assumindo 60 FPS, ajuste se necessário
+        float feedbackTextWidth = 0; // Precisaria de uma função para medir o texto
+        // Simulação da largura do texto para centralização
+        for(char c : currentFeedback) feedbackTextWidth += (Characters[c].Advance >> 6) * scale;
+
+        float feedbackBgWidth = feedbackTextWidth + 60.0f; // Aumentado de 40.0f para 60.0f
+        float feedbackBgHeight = 50.0f; // Aumentado de 40.0f para 50.0f
+        float feedbackBgX = (WINDOW_WIDTH - feedbackBgWidth) / 2.0f;
+        float feedbackBgY = WINDOW_HEIGHT - uiMargin - feedbackBgHeight;
+        
+        drawRectangle(feedbackBgX, feedbackBgY, feedbackBgWidth, feedbackBgHeight, COLOR_FEEDBACK_BG);
+        RenderText(currentFeedback, feedbackBgX + 30.0f, feedbackBgY + (feedbackBgHeight / 2.0f) - (Characters['A'].Size.y * scale / 3.0f), scale, COLOR_TEXT_UI);
+    }
+
+    // Mensagem de Game Over (Centralizada)
     if (gameOver) {
-        std::string message;
-        if (lives <= 0) {
-            message = "GAME OVER! Pressione R para reiniciar";
-        } else {
-            message = "VITORIA! Pressione R para reiniciar";
-        }
+        float gameOverBgWidth = 500.0f; // Aumentado de 400.0f para 500.0f
+        float gameOverBgHeight = 250.0f; // Aumentado de 200.0f para 250.0f
+        float gameOverBgX = (WINDOW_WIDTH - gameOverBgWidth) / 2.0f;
+        float gameOverBgY = (WINDOW_HEIGHT - gameOverBgHeight) / 2.0f;
+
+        drawRectangle(gameOverBgX, gameOverBgY, gameOverBgWidth, gameOverBgHeight, COLOR_GAMEOVER_BG);
         
-        float gameover_text_scale = 1.2f;
-        ascender_offset = (FONT_PIXEL_HEIGHT_LOAD * 0.75f) * gameover_text_scale;
-        float messageX = 100;
-        float messageY_baseline = WINDOW_HEIGHT / 2.0f + ascender_offset;
+        float textScaleLarge = 1.2f; // Aumentado de 0.8f para 1.2f
+        float textScaleMedium = 0.9f; // Aumentado de 0.5f para 0.9f
         
-        // Fundo escuro
-        drawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, Color(0, 0, 0, 0.7f));
-        
-        // Texto da mensagem
-        RenderText(message, messageX, messageY_baseline, gameover_text_scale, Color(1, 1, 1));
+        std::string gameOverText = "Fim de Jogo!";
+        float textX = gameOverBgX + (gameOverBgWidth - gameOverText.length() * 15 * textScaleLarge) / 2.0f; // Aproximação da largura
+        float textY = gameOverBgY + gameOverBgHeight - 70.0f; // Ajustado de 60.0f para 70.0f
+        RenderText(gameOverText, textX, textY, textScaleLarge, Color(1.0f, 0.3f, 0.3f));
+
+        std::string waveReachedText = "Você alcançou a onda: " + std::to_string(currentWave);
+        textX = gameOverBgX + (gameOverBgWidth - waveReachedText.length() * 15 * textScaleMedium) / 2.0f;
+        textY -= 60.0f; // Aumentado de 50.0f para 60.0f
+        RenderText(waveReachedText, textX, textY, textScaleMedium, COLOR_TEXT_UI);
+
+        std::string restartText = "Pressione R para reiniciar";
+        textX = gameOverBgX + (gameOverBgWidth - restartText.length() * 15 * textScaleMedium) / 2.0f;
+        textY -= 50.0f; // Aumentado de 40.0f para 50.0f
+        RenderText(restartText, textX, textY, textScaleMedium, COLOR_TEXT_UI);
     }
 }
