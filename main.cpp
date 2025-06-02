@@ -153,9 +153,9 @@ const float TOWER_DAMAGE = 20.0f;
 const int TOWER_FIRE_RATE = 75;
 const float ENEMY_HEALTH_BASE = 60.0f;
 const float ENEMY_SPEED_BASE = 0.0003f; // Reduzido de 0.8f para 0.3f
-const float ENEMY_REWARD_BASE = 5.0f;
+const float ENEMY_REWARD_BASE = 10.0f;
 const int ENEMIES_PER_WAVE_BASE = 5;
-const int ENEMY_SPAWN_DELAY = 60; // Frames entre spawns de inimigos
+const int ENEMY_SPAWN_DELAY = 400; // Frames entre spawns de inimigos
 
 // Variáveis globais do jogo
 float money = 120.0f;
