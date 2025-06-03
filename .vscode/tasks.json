@@ -4,11 +4,12 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "g++",            "args": [
+            "command": "g++",
+            "args": [
                 "main.cpp",
                 "dependencies/lib/glad.c",
                 "-o",
-                "cosmic_drift.exe",
+                "modern_tower_defense.exe",
                 "-Idependencies/include",
                 "-Ldependencies/lib",
                 "-lglfw3",
@@ -32,7 +33,7 @@
         {
             "label": "build and run",
             "type": "shell",
-            "command": "./cosmic_drift.exe",
+            "command": ".\\modern_tower_defense.exe",
             "dependsOn": "build",
             "group": "build",
             "presentation": {

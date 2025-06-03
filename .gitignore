@@ -1,5 +1,5 @@
 # Executáveis
-*.exe
+# *.exe
 *.out
 *.app
 
