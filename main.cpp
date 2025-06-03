@@ -766,6 +766,7 @@ void drawHexagon(float x, float y, float radius, Color color) {
 
     // Pontos do hexágono
     for (int i = 0; i <= segments; i++) { // <= para fechar o hexágono
+        // ROTAÇÃO: Adiciona π/6 radianos (30°) para alinhar a base
         float angle = 2.0f * (float)M_PI * i / segments + (M_PI / 6.0f); // Adiciona rotação para alinhar a base
         vertices.push_back(x + cos(angle) * radius);
         vertices.push_back(y + sin(angle) * radius);
